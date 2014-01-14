@@ -281,6 +281,8 @@ void PGMap::apply_incremental(CephContext *cct, const Incremental& inc)
     last_osdmap_epoch = inc.osdmap_epoch;
   if (inc.pg_scan)
     last_pg_scan = inc.pg_scan;
+
+  calc_min_last_epoch_clean();
 }
 
 void PGMap::redo_full_sets()
@@ -333,6 +335,8 @@ void PGMap::calc_stats()
     stat_osd_add(p->second);
 
   redo_full_sets();
+
+  calc_min_last_epoch_clean();
 }
 
 void PGMap::update_pg(pg_t pgid, bufferlist& bl)
