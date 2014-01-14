@@ -105,7 +105,7 @@ public:
   hash_map<int,pool_stat_t> pg_pool_sum;
   pool_stat_t pg_sum;
   osd_stat_t osd_sum;
-  epoch_t min_last_epoch_clean;
+  mutable epoch_t min_last_epoch_clean;
 
   utime_t stamp;
 

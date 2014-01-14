@@ -208,6 +208,12 @@ void PGMap::apply_incremental(CephContext *cct, const Incremental& inc)
       hash_map<pg_t,pg_stat_t>::value_type v(update_pg, update_stat);
       pg_stat.insert(v);
     } else {
+      // will we potentially affect the min?
+      if (min_last_epoch_clean &&
+	  t->second.get_effective_last_epoch_clean() == min_last_epoch_clean &&
+	  update_stat.get_effective_last_epoch_clean() != min_last_epoch_clean)
+	min_last_epoch_clean = 0;
+
       stat_pg_sub(update_pg, t->second);
       t->second = update_stat;
     }
@@ -229,8 +235,18 @@ void PGMap::apply_incremental(CephContext *cct, const Incremental& inc)
       stat_osd_sub(t->second);
       t->second = new_stats;
     }
-    assert(inc.get_osd_epochs().find(osd) != inc.get_osd_epochs().end());
-    osd_epochs.insert(*(inc.get_osd_epochs().find(osd)));
+    hash_map<int32_t,epoch_t>::iterator i = osd_epochs.find(osd);
+    map<int32_t,epoch_t>::const_iterator j = inc.get_osd_epochs().find(osd);
+    assert(j != inc.get_osd_epochs().end());
+
+    // will we potentially affect the min?
+    if (i == osd_epochs.end() ||
+	(min_last_epoch_clean &&
+	 i->second == min_last_epoch_clean &&
+	 i->second != j->second))
+      min_last_epoch_clean = 0;
+
+    osd_epochs.insert(*j);
 
     stat_osd_add(new_stats);
 
