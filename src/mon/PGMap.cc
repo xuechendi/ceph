@@ -298,7 +298,7 @@ void PGMap::apply_incremental(CephContext *cct, const Incremental& inc)
   if (inc.pg_scan)
     last_pg_scan = inc.pg_scan;
 
-  calc_min_last_epoch_clean();
+  min_last_epoch_clean = 0;  // invalidate
 }
 
 void PGMap::redo_full_sets()
