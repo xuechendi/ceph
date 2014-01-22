@@ -273,9 +273,13 @@ private:
    * @param dest_type The peer type of the address we're sending to
    * @param lazy If true, do not establish or fix a Connection to send the Message;
    * just drop silently under failure.
+   * @param already_locked If false, submit_message() will acquire the
+   * SimpleMessenger lock before accessing shared data structures; otherwise
+   * it will assume the lock is held.
    */
   void submit_message(Message *m, Connection *con,
-                      const entity_addr_t& addr, int dest_type, bool lazy);
+		      const entity_addr_t& addr, int dest_type,
+		      bool lazy, bool already_locked);
   /**
    * Look through the pipes in the pipe_reap_queue and tear them down.
    */
