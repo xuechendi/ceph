@@ -101,7 +101,6 @@ void PerfCounters::inc(int idx, uint64_t amt)
   if (!m_cct->_conf->perf)
     return;
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -117,7 +116,6 @@ void PerfCounters::dec(int idx, uint64_t amt)
   if (!m_cct->_conf->perf)
     return;
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -133,7 +131,6 @@ void PerfCounters::set(int idx, uint64_t amt)
   if (!m_cct->_conf->perf)
     return;
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -149,7 +146,6 @@ uint64_t PerfCounters::get(int idx) const
   if (!m_cct->_conf->perf)
     return 0;
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   const perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -163,7 +159,6 @@ void PerfCounters::tinc(int idx, utime_t amt)
   if (!m_cct->_conf->perf)
     return;
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -179,7 +174,6 @@ void PerfCounters::tset(int idx, utime_t amt)
   if (!m_cct->_conf->perf)
     return;
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -195,7 +189,6 @@ utime_t PerfCounters::tget(int idx) const
   if (!m_cct->_conf->perf)
     return utime_t();
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   const perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -209,7 +202,6 @@ pair<uint64_t, uint64_t> PerfCounters::get_tavg_ms(int idx) const
   if (!m_cct->_conf->perf)
     return make_pair(0, 0);
 
-  Mutex::Locker lck(m_lock);
   assert(idx > m_lower_bound);
   assert(idx < m_upper_bound);
   const perf_counter_data_any_d& data(m_data[idx - m_lower_bound - 1]);
@@ -222,8 +214,6 @@ pair<uint64_t, uint64_t> PerfCounters::get_tavg_ms(int idx) const
 
 void PerfCounters::dump_formatted(Formatter *f, bool schema)
 {
-  Mutex::Locker lck(m_lock);
-
   f->open_object_section(m_name.c_str());
   perf_counter_data_vec_t::const_iterator d = m_data.begin();
   perf_counter_data_vec_t::const_iterator d_end = m_data.end();

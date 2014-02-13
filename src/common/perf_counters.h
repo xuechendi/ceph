@@ -117,8 +117,8 @@ private:
 
     const char *name;
     enum perfcounter_type_d type;
-    uint64_t u64;
-    uint64_t avgcount;
+    atomic64_t u64;
+    atomic64_t avgcount;
   };
   typedef std::vector<perf_counter_data_any_d> perf_counter_data_vec_t;
 
