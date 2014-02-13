@@ -68,7 +68,7 @@ endif
 bin_PROGRAMS += ceph-dencoder
 
 get_command_descriptions_SOURCES = test/common/get_command_descriptions.cc
-get_command_descriptions_LDADD = $(LIBMON) $(LIBCOMMON) $(CEPH_GLOBAL)
+get_command_descriptions_LDADD = $(LIBMON) $(CEPH_GLOBAL)
 noinst_PROGRAMS += get_command_descriptions
 
 
@@ -296,12 +296,12 @@ check_PROGRAMS += unittest_util
 
 unittest_crush_indep_SOURCES = test/crush/indep.cc
 unittest_crush_indep_CXXFLAGS = $(UNITTEST_CXXFLAGS)
-unittest_crush_indep_LDADD = $(LIBCOMMON) -lm $(UNITTEST_LDADD) $(CEPH_CRUSH) $(EXTRALIBS) $(CEPH_GLOBAL)
+unittest_crush_indep_LDADD = -lm $(UNITTEST_LDADD) $(CEPH_CRUSH) $(EXTRALIBS) $(CEPH_GLOBAL)
 check_PROGRAMS += unittest_crush_indep
 
 unittest_osdmap_SOURCES = test/osd/TestOSDMap.cc
 unittest_osdmap_CXXFLAGS = $(UNITTEST_CXXFLAGS)
-unittest_osdmap_LDADD = $(UNITTEST_LDADD) $(LIBCOMMON) $(CEPH_GLOBAL)
+unittest_osdmap_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 check_PROGRAMS += unittest_osdmap
 
 unittest_workqueue_SOURCES = test/test_workqueue.cc
@@ -479,7 +479,7 @@ unittest_context_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 check_PROGRAMS += unittest_context
 
 unittest_heartbeatmap_SOURCES = test/heartbeat_map.cc
-unittest_heartbeatmap_LDADD = $(LIBCOMMON) $(UNITTEST_LDADD) $(CEPH_GLOBAL)
+unittest_heartbeatmap_LDADD = $(UNITTEST_LDADD) $(CEPH_GLOBAL)
 unittest_heartbeatmap_CXXFLAGS = $(UNITTEST_CXXFLAGS)
 check_PROGRAMS += unittest_heartbeatmap
 
