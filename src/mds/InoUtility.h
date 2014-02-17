@@ -19,14 +19,20 @@
 class InoUtility : public MDSUtility {
 private:
   librados::Rados rados;
-  librados::IoCtx ioctx;
+  librados::IoCtx md_ioctx;
+  librados::IoCtx data_ioctx;
 
   inode_t root_ino;
   fragtree_t root_fragtree;
 
+  void traverse_fragment(object_t const &fragment);
+  void traverse_dir(fragtree_t const &frags, inode_t const &ino);
+
 public:
   void by_path(std::string const &path);
   void by_id(inodeno_t const id);
+
+  void simple_fsck();
 
   virtual int init();
   virtual void shutdown();

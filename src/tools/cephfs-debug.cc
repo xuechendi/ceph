@@ -7,8 +7,9 @@
 
 void usage() {
   std::cerr << "Usage: \n"
-      "    cephfs by_id <inode id>\n"
-      "    cephfs by_path <path>\n";
+      "    cephfs-debug by_id <inode id>\n"
+      "    cephfs-debug by_path <path>\n"
+      "    cephfs-debug simple_fsck\n";
 }
 
 int main(int argc, const char **argv)
@@ -35,6 +36,8 @@ int main(int argc, const char **argv)
   } else if (args[0] == std::string("by_path")) {
     std::string path = args[1];
     inou.by_path(path);
+  } else if (args[0] == std::string("simple_fsck")) {
+    inou.simple_fsck();
   } else {
     usage();
     inou.shutdown();

@@ -31,14 +31,15 @@ int InoUtility::init()
   // FIXME global conf init handles this for objecter, where shall I get it from?
   rados.conf_read_file("./ceph.conf");
   rados.connect();
-  // FIXME this takes pool by name, we have ID
-  rados.ioctx_create("metadata", ioctx);
+
+  rados.ioctx_create("metadata", md_ioctx);  // FIXME this takes pool by name, we have ID
+  rados.ioctx_create("data", data_ioctx);  // FIXME this takes pool by name, we have ID
 
   // Populate root_ino and root_fragtree
   object_t root_oid = CInode::get_object_name(MDS_INO_ROOT, frag_t(), ".inode");
   bufferlist root_inode_bl;
   int whole_file = 1 << 22;  // FIXME: magic number, this is what rados.cc uses for default op_size
-  ioctx.read(root_oid.name, root_inode_bl, whole_file, 0);
+  md_ioctx.read(root_oid.name, root_inode_bl, whole_file, 0);
   string magic;
   string symlink;
   bufferlist::iterator root_inode_bl_iter = root_inode_bl.begin();
@@ -97,7 +98,7 @@ void InoUtility::by_path(std::string const &path)
     // FIXME: relying on prefix of dentry name to be unique, can this be
     // broken by snaps with underscores in name perhaps like 123_head vs 123_headusersnap?  or
     // is the snap postfix an ID?
-    ioctx.omap_get_vals(
+    md_ioctx.omap_get_vals(
       frag_object_id.name,
       "", dentry_name, 11, &omap_out);
     if (omap_out.size() != 1) {
@@ -158,30 +159,20 @@ void InoUtility::by_path(std::string const &path)
 void InoUtility::by_id(inodeno_t const id)
 {
   dout(4) << __func__ << dendl;
+
   // Read backtrace object.  Because we don't know ahead of time
   // whether this is a directory, we must look in both the default
   // data pool (non-directories) and the metadata pool (directories)
-  bool found_bt = false;
-  std::vector<int64_t> pools;
-  pools.push_back(mdsmap->get_metadata_pool());
-  pools.push_back(mdsmap->get_first_data_pool());
   bufferlist parent_bl;
-
-  for (std::vector<int64_t>::iterator pool_id = pools.begin();
-    pool_id != pools.end(); ++pool_id) {
-    object_t oid = CInode::get_object_name(id, frag_t(), "");
-    object_locator_t oloc(mdsmap->get_metadata_pool());
-    int r = ioctx.getxattr(oid.name, "parent", parent_bl);
-    if (r < 0) {
-      dout(4) << "Backtrace for '" << id << "' not found in pool '" << *pool_id << dendl;
-      continue;
-    } else {
-      found_bt = true;
+  object_t oid = CInode::get_object_name(id, frag_t(), "");
+  int rc = md_ioctx.getxattr(oid.name, "parent", parent_bl);
+  if (rc) {
+    dout(4) << "Backtrace for '" << id << "' not found in metadata pool" << dendl;
+    int rc = data_ioctx.getxattr(oid.name, "parent", parent_bl);
+    if (rc) {
+      dout(0) << "No backtrace found for inode '" << id << "'" << dendl;
+      return;
     }
-  }
-  if (!found_bt) {
-    dout(0) << "No backtrace found for inode '" << id << "'" << dendl;
-    return;
   }
 
   // We got the backtrace data, decode it.
@@ -225,7 +216,7 @@ void InoUtility::by_id(inodeno_t const id)
     // FIXME: relying on prefix of dentry name to be unique, can this be
     // broken by snaps with underscores in name perhaps like 123_head vs 123_headusersnap?  or
     // is the snap postfix an ID?
-    ioctx.omap_get_vals(
+    md_ioctx.omap_get_vals(
 	frag_object_id.name,
 	"", dentry_name, 11, &omap_out);
     if (omap_out.size() != 1) {
@@ -269,3 +260,83 @@ void InoUtility::by_id(inodeno_t const id)
     std::cout << std::endl;
   }
 }
+
+
+/**
+ * Given the ID of a directory fragment, iterate
+ * over the dentrys in the fragment and call traverse_dentry
+ * for each one.
+ */
+void InoUtility::traverse_fragment(object_t const &fragment)
+{
+  std::string start_after;
+
+  std::map<std::string, bufferlist> dname_to_dentry;
+  do {
+    dname_to_dentry.clear();
+    int rc = md_ioctx.omap_get_vals(fragment.name, start_after, "", 1024, &dname_to_dentry);
+    if (rc != 0) {
+      std::cout << "Error reading fragment object '" << fragment.name << "'" << std::endl;
+      return;
+    }
+
+    for(std::map<std::string, bufferlist>::iterator i = dname_to_dentry.begin();
+	i != dname_to_dentry.end(); ++i) {
+      std::string const &dname = i->first;
+      bufferlist &dentry_data = i->second;
+
+      inode_t inode;
+      fragtree_t fragtree;
+
+      bufferlist::iterator dentry_iter = dentry_data.begin();
+      snapid_t dentry_snapid;
+      ::decode(dentry_snapid, dentry_iter);
+      char type;
+      ::decode(type, dentry_iter);
+      if (type != 'I') {
+        dout(0) << "Unknown type '" << type << "'" << dendl;
+        assert(type == 'I'); // TODO: handle is_remote branch
+      }
+      ::decode(inode, dentry_iter);
+      if (inode.is_symlink()) {
+        string symlink;
+        ::decode(symlink, dentry_iter);
+      }
+      ::decode(fragtree, dentry_iter);
+
+      if (inode.is_dir()) {
+	std::cout << "Directory '" << dname << "' " << std::hex << inode.ino << std::dec << std::endl;
+	traverse_dir(fragtree, inode);
+      } else {
+	std::cout << "File '" << dname << "' " << std::hex << inode.ino << std::dec << std::endl;
+      }
+
+      start_after = dname;
+    }
+
+  } while (dname_to_dentry.size() != 0);
+}
+
+
+/**
+ * Given a directory inode and its fragment tree, iterate over
+ * the fragments and call traverse_fragment for each one.
+ */
+void InoUtility::traverse_dir(fragtree_t const &frags, inode_t const &ino)
+{
+  std::list<frag_t> frag_leaves;
+  frags.get_leaves(frag_leaves);
+
+  for(std::list<frag_t>::iterator i = frag_leaves.begin(); i != frag_leaves.end(); ++i) {
+    object_t frag_obj = CInode::get_object_name(ino.ino, *i, "");
+    traverse_fragment(frag_obj);
+  }
+}
+
+
+void InoUtility::simple_fsck()
+{
+  traverse_dir(root_fragtree, root_ino);
+}
+
+
