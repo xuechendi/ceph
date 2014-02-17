@@ -33,7 +33,8 @@ int main(int argc, const char **argv)
     inodeno_t ino = strtoll(args[1], NULL, 0);
     inou.by_id(ino);
   } else if (args[0] == std::string("by_path")) {
-
+    std::string path = args[1];
+    inou.by_path(path);
   } else {
     usage();
     inou.shutdown();

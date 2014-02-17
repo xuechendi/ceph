@@ -4,6 +4,10 @@
 
 #include "mds/MDSUtility.h"
 
+#include "include/rados/librados.hpp"
+#include "include/frag.h"
+#include "mds/mdstypes.h"
+
 
 /**
  * Utility for inspecting inode/directory fragment
@@ -13,9 +17,19 @@
  * journal before running this).
  */
 class InoUtility : public MDSUtility {
+private:
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+
+  inode_t root_ino;
+  fragtree_t root_fragtree;
+
 public:
   void by_path(std::string const &path);
   void by_id(inodeno_t const id);
+
+  virtual int init();
+  virtual void shutdown();
 };
 
 #endif // INO_UTILITY_H_
