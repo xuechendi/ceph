@@ -105,7 +105,8 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   messenger(m),
   monc(mc),
   clog(m->cct, messenger, &mc->monmap, LogClient::NO_FLAGS),
-  sessionmap(this) {
+  sessionmap(this),
+  requested_shutdown(false) {
 
   orig_argc = 0;
   orig_argv = NULL;
@@ -1637,17 +1638,25 @@ void MDS::handle_signal(int signum)
   assert(signum == SIGINT || signum == SIGTERM);
   derr << "*** got signal " << sys_siglist[signum] << " ***" << dendl;
   mds_lock.Lock();
-  suicide();
+  if (requested_shutdown) {
+    // We already asked nicely, this time take no prisoners
+    hard_shutdown();
+  } else {
+    request_shutdown();
+    requested_shutdown = true;
+  }
   mds_lock.Unlock();
 }
 
-void MDS::suicide()
+
+/**
+ * Call this when the dispatch loop is done
+ */
+void MDS::shutdown()
 {
   assert(mds_lock.is_locked());
-  want_state = CEPH_MDS_STATE_DNE; // whatever.
 
-  dout(1) << "suicide.  wanted " << ceph_mds_state_name(want_state)
-	  << ", now " << ceph_mds_state_name(state) << dendl;
+  dout(1) << __func__ << dendl;
 
   // stop timers
   if (beacon_sender) {
@@ -1673,6 +1682,46 @@ void MDS::suicide()
   // shut down messenger
   messenger->shutdown();
 }
+
+/**
+ * Initiate shutdown.  This does not terminate the process asynchronously,
+ * rather it initiates a process which leads to messenger completion so that
+ * we (eventually) fall out of our dispatch loop.
+ */
+void MDS::suicide()
+{
+  assert(mds_lock.is_locked());
+  want_state = CEPH_MDS_STATE_DNE;
+  dout(1) << "suicide.  wanted " << ceph_mds_state_name(want_state)
+	  << ", now " << ceph_mds_state_name(state) << dendl;
+}
+
+
+/**
+ * When you absolutely, positively must exit.
+ */
+void MDS::hard_shutdown()
+{
+  dout(1) << "hard_shutdown" << dendl;
+  exit(-1);
+}
+
+
+/**
+ * Clean(ish) shutdown, we will allow the dispatch loop to handle
+ * a message to shut down.
+ */
+void MDS::request_shutdown()
+{
+  MMonCommand *m = new MMonCommand();
+  m->cmd.push_back("exit");
+  int r = messenger->send_message(m, messenger->get_myinst());
+  if (r != 0) {
+    dout(0) << "Failed to send shutdown message: " << cpp_strerror(r) << dendl;
+    hard_shutdown();
+  }
+}
+
 
 void MDS::respawn()
 {
@@ -1700,8 +1749,6 @@ void MDS::respawn()
 }
 
 
-
-
 bool MDS::ms_dispatch(Message *m)
 {
   bool ret;
@@ -1713,6 +1760,7 @@ bool MDS::ms_dispatch(Message *m)
   } else {
     ret = _dispatch(m);
   }
+
   mds_lock.Unlock();
   return ret;
 }
@@ -1769,8 +1817,13 @@ bool MDS::handle_core_message(Message *m)
     
     // misc
   case MSG_MON_COMMAND:
-    ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
-    handle_command(static_cast<MMonCommand*>(m));
+    if (m->get_connection()->peer_addr == messenger->get_myaddr()) {
+      // Accept messages from myself (use 'exit' command to kill myself cleanly)
+      handle_command(static_cast<MMonCommand*>(m));
+    } else {
+      ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
+      handle_command(static_cast<MMonCommand*>(m));
+    }
     break;    
 
     // OSD
@@ -2067,6 +2120,11 @@ bool MDS::_dispatch(Message *m)
       dout(7) << "shutdown_pass=false" << dendl;
     }
   }
+
+  if (want_state == CEPH_MDS_STATE_DNE) {
+    shutdown();
+  }
+
   return true;
 }
 

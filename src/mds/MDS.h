@@ -398,6 +398,11 @@ class MDS : public Dispatcher {
   void handle_mds_recovery(int who);
   void handle_mds_failure(int who);
 
+  bool requested_shutdown;   // Indicate a signal already requested shutdown, so that
+			     // on retry we do a more aggressive shutdown.
+  void request_shutdown();
+  void hard_shutdown();
+  void shutdown();
   void suicide();
   void respawn();
 
