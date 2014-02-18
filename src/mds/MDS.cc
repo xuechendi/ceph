@@ -105,7 +105,8 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   messenger(m),
   monc(mc),
   clog(m->cct, messenger, &mc->monmap, LogClient::NO_FLAGS),
-  sessionmap(this) {
+  sessionmap(this),
+  objecter_busy(false) {
 
   orig_argc = 0;
   orig_argv = NULL;
@@ -1641,13 +1642,14 @@ void MDS::handle_signal(int signum)
   mds_lock.Unlock();
 }
 
-void MDS::suicide()
+/**
+ * First stage of shutdown, shut down everything but the objecter and
+ * its dependencies.  Call this at any point while holding mds_lock.  This
+ * leaves the network stack up for any last-gasp remote operations.
+ */
+void MDS::shutdown_start()
 {
-  assert(mds_lock.is_locked());
-  want_state = CEPH_MDS_STATE_DNE; // whatever.
-
-  dout(1) << "suicide.  wanted " << ceph_mds_state_name(want_state)
-	  << ", now " << ceph_mds_state_name(state) << dendl;
+  dout(1) << __func__ << dendl;
 
   // stop timers
   if (beacon_sender) {
@@ -1664,7 +1666,17 @@ void MDS::suicide()
   
   // shut down cache
   mdcache->shutdown();
+}
 
+/**
+ * Final stage of shutdown, call this when it is safe to
+ * tear down the objecter (i.e. all network operations are done).
+ */
+void MDS::shutdown_finish()
+{
+  dout(1) << __func__ << dendl;
+
+  assert(!objecter_busy);
   if (objecter->initialized)
     objecter->shutdown_locked();
 
@@ -1672,6 +1684,28 @@ void MDS::suicide()
 
   // shut down messenger
   messenger->shutdown();
+}
+
+/**
+ * Initiate shutdown.  This does not terminate the process asynchronously,
+ * rather it initiates a process which leads to messenger completion so that
+ * we (eventually) fall out of our dispatch loop.
+ */
+void MDS::suicide()
+{
+  assert(mds_lock.is_locked());
+  want_state = CEPH_MDS_STATE_DNE;
+  dout(1) << "suicide.  wanted " << ceph_mds_state_name(want_state)
+	  << ", now " << ceph_mds_state_name(state) << dendl;
+
+  shutdown_start();
+  if (!objecter_busy) {
+    // We protect the messenger/objecter instances from being
+    // torn down while a _dispatch is in progress.
+    shutdown_finish();
+  } else {
+    dout(1) << "deferring final teardown to end of dispatch loop" << dendl;
+  }
 }
 
 void MDS::respawn()
@@ -1700,8 +1734,6 @@ void MDS::respawn()
 }
 
 
-
-
 bool MDS::ms_dispatch(Message *m)
 {
   bool ret;
@@ -1711,8 +1743,16 @@ bool MDS::ms_dispatch(Message *m)
     m->put();
     ret = true;
   } else {
+    objecter_busy = true;
     ret = _dispatch(m);
+    objecter_busy = false;
+
+    if (want_state == CEPH_MDS_STATE_DNE) {
+      // suicide() was called while we were in _dispatch
+      shutdown_finish();
+    }
   }
+
   mds_lock.Unlock();
   return ret;
 }

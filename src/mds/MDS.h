@@ -321,6 +321,7 @@ class MDS : public Dispatcher {
   }
 
  private:
+  bool objecter_busy;
   bool ms_dispatch(Message *m);
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new);
   bool ms_verify_authorizer(Connection *con, int peer_type,
@@ -398,6 +399,8 @@ class MDS : public Dispatcher {
   void handle_mds_recovery(int who);
   void handle_mds_failure(int who);
 
+  void shutdown_start();
+  void shutdown_finish();
   void suicide();
   void respawn();
 
