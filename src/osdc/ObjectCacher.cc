@@ -196,26 +196,47 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
     loff_t left = ex_it->length;
 
     map<loff_t, BufferHead*>::iterator p = data_lower_bound(ex_it->offset);
+    map<loff_t, CacheHeader*>::iterator ch;
     while (left > 0) {
-      // at end?
+      // at end of memory?
       if (p == data.end()) {
-        // rest is a miss.
-        BufferHead *n = new BufferHead(this);
-        n->set_start(cur);
-        n->set_length(left);
-        oc->bh_add(this, n);
-	if (complete) {
-	  oc->mark_zero(n);
-	  hits[cur] = n;
-	  ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
-	} else {
-	  missing[cur] = n;
-	  ldout(oc->cct, 20) << "map_read miss " << left << " left, " << *n << dendl;
+	ch = kvc->lower_bound(cur);
+	if(ch->first > cur && cur + left > ch->first){//not in memory but partial in leveldb
+	  BufferHead *n = new BufferHead(this);
+	  n->set_start(cur);
+	  loff_t lenfromcur = ch->first - cur;
+	  n->set_length( lenfromcur );
+	  n->kvc_cached = false;
+	  oc->bh_add(this, n);
+	  if (complete) {
+	    oc->mark_zero(n);
+	    hits[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
+	  } else {
+	    missing[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss " << left << " left, " << *n << dendl;
+	  }
+	  cur += lenfromcur;
+	  left -= lenfromcur;
 	}
-        cur += left;
-        left = 0;
-        assert(cur == (loff_t)ex_it->offset + (loff_t)ex_it->length);
-        break;  // no more.
+	if(ch->first <= cur && ch->first + ch->second->length > cur){//not in memory but in leveldb
+	  BufferHead *n = new BufferHead(this);
+	  n->set_start(cur);
+	  loff_t lenfromcur = MIN( ch->first + ch->second->length - cur, left );
+	  n->set_length( lenfromcur );
+	  n->kvc_cached = true;
+	  oc->bh_add(this, n);
+	  if (complete) {
+	    oc->mark_zero(n);
+	    hits[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
+	  } else {
+	    missing[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss " << left << " left, " << *n << dendl;
+	  }
+	  cur += lenfromcur;
+	  left -= lenfromcur;
+	}
       }
       
       if (p->first <= cur) {
@@ -515,6 +536,7 @@ ObjectCacher::ObjectCacher(CephContext *cct_, string name, WritebackHandler& wb,
   this->max_dirty_age.set_from_double(max_dirty_age);
   perf_start();
   finisher.start();
+  kvc = new KeyValueCacher(cct, cct->_conf->rbd_keyvaluecache_path);
 }
 
 ObjectCacher::~ObjectCacher()
@@ -778,9 +800,11 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, tid_t tid,
 	bh->error = r;
 	mark_error(bh);
       } else {
-	bh->bl.substr_of(bl,
-			 oldpos-bh->start(),
-			 bh->length());
+	bh->bl.substr_of(bl,oldpos-bh->start(),bh->length());
+	/*copy writeback data to memory( bl copy to bh->bl)
+	add KeyValueCache interface here*/
+	kvc->write(bh->bl, bh->start(), bh->length());
+	bh->kvc_inclusive = true;
 	mark_clean(bh);
       }
 
@@ -1109,6 +1133,9 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
       for (map<loff_t, BufferHead*>::iterator bh_it = missing.begin();
            bh_it != missing.end();
            ++bh_it) {
+	  if ( bh->kvc_cached ){ /*cache in KeyValueCacher*/
+	    kvc->read(bh->bl, bh->start());
+	  }
         bh_read(bh_it->second);
         if (success && onfinish) {
           ldout(cct, 10) << "readx missed, waiting on " << *bh_it->second 
@@ -1173,9 +1200,7 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
 	  bp.zero();
 	  stripe_map[f_it->first].push_back(bp);
 	} else {
-	  bit.substr_of(bh->bl,
-			opos - bh->start(),
-			len);
+	  bit.substr_of(bh->bl,opos - bh->start(),len);
 	  stripe_map[f_it->first].claim_append(bit);
 	}
 
@@ -1308,6 +1333,9 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
 	newbl.substr_of(bh->bl, 0, bhoff);
       newbl.claim_append(frag);
       bh->bl.swap(newbl);
+
+      kvc->write(bh->bl, bh->start());
+      bh->kvc_inclusive = true;
 
       opos += f_it->second;
     }

@@ -14,6 +14,7 @@
 
 #include "Objecter.h"
 #include "Striper.h"
+#include "KeyValueCacher.h"
 
 class CephContext;
 class WritebackHandler;
@@ -103,6 +104,7 @@ class ObjectCacher {
   public:
     Object *ob;
     bufferlist  bl;
+    bool kvc_cached;
     tid_t last_write_tid;  // version of bh (if non-zero)
     tid_t last_read_tid;   // tid of last read op (if any)
     utime_t last_write;
@@ -116,6 +118,7 @@ class ObjectCacher {
       state(STATE_MISSING),
       ref(0),
       ob(o),
+      kvc_inclusive(false),
       last_write_tid(0),
       last_read_tid(0),
       error(0) {
@@ -328,6 +331,7 @@ class ObjectCacher {
   // ObjectCacher fields
  private:
   WritebackHandler& writeback_handler;
+  KeyValueCacher& kvc;
 
   string name;
   Mutex& lock;
