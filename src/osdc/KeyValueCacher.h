@@ -44,6 +44,7 @@ class KeyValueCacher {
     /*LevelDB function*/
     int open(ostream &out);
     uint64_t get_size(){return stored_data_size}
+    void set_size(int32_t change){ stored_data_size += change;}
 
 };
 #endif

@@ -200,26 +200,58 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
     while (left > 0) {
       // at end of memory?
       if (p == data.end()) {
-	ch = kvc->lower_bound(cur);
-	if(ch->first > cur && cur + left > ch->first){//not in memory but partial in leveldb
+	ch = kvc->dir_lower_bound(cur);
+	if( ch == kvc->cache_dir.end() ){
+	  //not in memory and leveldb
+	  BufferHead *n = new BufferHead(this);
+	  n->set_start(cur);
+	  loff_t lenfromcur = left;
+	  n->set_length( lenfromcur );
+	  n->kvc_cached = false;
+	  oc->bh_add(this, n);
+	  CacheHeader *nc = new CacheHeader();
+	  nc->length = lenfromcur;
+	  nc->key = cur;
+	  kvc->cache_dir[cur] = nc;
+	  if (complete) {
+	    oc->mark_zero(n);
+	    n->kvc_cached = true;
+	    hits[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
+	  } else {
+	    missing[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss from backend" << left << " left, " << *n << dendl;
+	  }
+	  cur += lenfromcur;
+	  left -= lenfromcur;
+	  assert(cur == (loff_t)ex_it->offset + (loff_t)ex_it->length);
+	  break;  // no more.
+	}
+	if(ch->first > cur){
+	  //not in memory but partial in leveldb
 	  BufferHead *n = new BufferHead(this);
 	  n->set_start(cur);
 	  loff_t lenfromcur = ch->first - cur;
 	  n->set_length( lenfromcur );
 	  n->kvc_cached = false;
 	  oc->bh_add(this, n);
+	  CacheHeader *nc = new CacheHeader();
+	  nc->length = lenfromcur;
+	  nc->key = cur;
+	  kvc->cache_dir[cur] = nc;
 	  if (complete) {
 	    oc->mark_zero(n);
+	    n->kvc_cached = true;
 	    hits[cur] = n;
 	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
 	  } else {
 	    missing[cur] = n;
-	    ldout(oc->cct, 20) << "map_read miss " << left << " left, " << *n << dendl;
+	    ldout(oc->cct, 20) << "map_read miss from backend" << left << " left, " << *n << dendl;
 	  }
 	  cur += lenfromcur;
 	  left -= lenfromcur;
 	}
-	if(ch->first <= cur && ch->first + ch->second->length > cur){//not in memory but in leveldb
+	if(ch->first == cur){//not in memory but in leveldb
 	  BufferHead *n = new BufferHead(this);
 	  n->set_start(cur);
 	  loff_t lenfromcur = MIN( ch->first + ch->second->length - cur, left );
@@ -232,10 +264,11 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
 	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
 	  } else {
 	    missing[cur] = n;
-	    ldout(oc->cct, 20) << "map_read miss " << left << " left, " << *n << dendl;
+	    ldout(oc->cct, 20) << "map_read miss from leveldb" << left << " left, " << *n << dendl;
 	  }
 	  cur += lenfromcur;
 	  left -= lenfromcur;
+	  continue;
 	}
       }
       
@@ -252,6 +285,9 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
         } else if (e->is_rx()) {
           rx[cur] = e;       // missing, not readable.
           ldout(oc->cct, 20) << "map_read rx " << *e << dendl;
+	  //data in rx are those have been primaryly put in missing, and waiting to be received, so we need to check the e->kvc_cached still being false, or we need to change it to false.
+	  if(e->kvc_cached)
+	    e->kvc_cached = false;
         } else if (e->is_error()) {
 	  errors[cur] = e;
 	  ldout(oc->cct, 20) << "map_read error " << *e << dendl;
@@ -267,24 +303,51 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
         
       } else if (p->first > cur) {
         // gap.. miss
-        loff_t next = p->first;
-        BufferHead *n = new BufferHead(this);
-	loff_t len = MIN(next - cur, left);
-        n->set_start(cur);
-	n->set_length(len);
-        oc->bh_add(this,n);
-	if (complete) {
-	  oc->mark_zero(n);
-	  hits[cur] = n;
-	  ldout(oc->cct, 20) << "map_read gap+complete+zero " << *n << dendl;
-	} else {
-	  missing[cur] = n;
-	  ldout(oc->cct, 20) << "map_read gap " << *n << dendl;
+	ch = kvc->lower_bound(cur);
+	if(ch->first > cur){//not in memory but partial in leveldb
+	  BufferHead *n = new BufferHead(this);
+	  n->set_start(cur);
+	  loff_t lenfromcur = ch->first - cur;
+	  n->set_length( lenfromcur );
+	  n->kvc_cached = false;
+	  oc->bh_add(this, n);
+	  CacheHeader *nc = new CacheHeader();
+	  nc->length = lenfromcur;
+	  nc->key = cur;
+	  kvc->cache_dir[cur] = nc;
+	  if (complete) {
+	    oc->mark_zero(n);
+	    n->kvc_cached = true;
+	    hits[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
+	  } else {
+	    missing[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss from backend" << left << " left, " << *n << dendl;
+	  }
+	  cur += lenfromcur;
+	  left -= lenfromcur;
 	}
-        cur += MIN(left, n->length());
-        left -= MIN(left, n->length());
-        continue;    // more?
-      } else {
+	if(ch->first <= cur ){
+	  //not in memory but in leveldb
+	  BufferHead *n = new BufferHead(this);
+	  n->set_start(cur);
+	  loff_t lenfromcur = MIN( ch->first + ch->second->length - cur, left );
+	  n->set_length( lenfromcur );
+	  n->kvc_cached = true;
+	  oc->bh_add(this, n);
+	  if (complete) {
+	    oc->mark_zero(n);
+	    hits[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss+complete+zero " << left << " left, " << *n << dendl;
+	  } else {
+	    missing[cur] = n;
+	    ldout(oc->cct, 20) << "map_read miss from leveldb" << left << " left, " << *n << dendl;
+	  }
+	  cur += lenfromcur;
+	  left -= lenfromcur;
+	  continue;
+	}
+      }else {
         assert(0);
       }
     }
@@ -803,8 +866,9 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, tid_t tid,
 	bh->bl.substr_of(bl,oldpos-bh->start(),bh->length());
 	/*copy writeback data to memory( bl copy to bh->bl)
 	add KeyValueCache interface here*/
-	kvc->write(bh->bl, bh->start(), bh->length());
-	bh->kvc_inclusive = true;
+	kvc->write(bh->bl, bh->start());
+	kvc->cache_dir[bh->start()].length
+	bh->kvc_cached = true;
 	mark_clean(bh);
       }
 
@@ -1134,16 +1198,18 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
            bh_it != missing.end();
            ++bh_it) {
 	  if ( bh->kvc_cached ){ /*cache in KeyValueCacher*/
-	    kvc->read(bh->bl, bh->start());
+	    kvc->read(bh_it->bl, bh_it->start());
+	    hits[bh_it->start] = missing[bh_it->start];
+	    continue;
 	  }
-        bh_read(bh_it->second);
-        if (success && onfinish) {
-          ldout(cct, 10) << "readx missed, waiting on " << *bh_it->second 
+	  bh_read(bh_it->second);
+	  if (success && onfinish) {
+	    ldout(cct, 10) << "readx missed, waiting on " << *bh_it->second 
                    << " off " << bh_it->first << dendl;
-	  bh_it->second->waitfor_read[bh_it->first].push_back( new C_RetryRead(this, rd, oset, onfinish) );
-        }
-        bytes_not_in_cache += bh_it->second->length();
-	success = false;
+	    bh_it->second->waitfor_read[bh_it->first].push_back( new C_RetryRead(this, rd, oset, onfinish) );
+	  }
+	  bytes_not_in_cache += bh_it->second->length();
+	  success = false;
       }
 
       // bump rx
