@@ -417,20 +417,55 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
 
       // at end ?
       if (p == data.end()) {
-        if (final == NULL) {
-          final = new BufferHead(this);
-          final->set_start( cur );
-          final->set_length( max );
-          oc->bh_add(this, final);
-          ldout(oc->cct, 10) << "map_write adding trailing bh " << *final << dendl;
-        } else {
-	  oc->bh_stat_sub(final);
-          final->set_length(final->length() + max);
-	  oc->bh_stat_add(final);
-        }
-        left -= max;
-        cur += max;
-        continue;
+	ch = kvc->dir_lower_bound(cur);
+	if( ch == kvc->cache_dir.end() ){
+	  //not in memory and leveldb
+	  if (final == NULL) {
+	    final = new BufferHead(this);
+	    final->set_start( cur );
+	    final->set_length( max );
+	    final->kvc_cached = false;
+	    oc->bh_add(this, final);
+	    ldout(oc->cct, 10) << "map_write adding trailing bh " << *final << dendl;
+	  } else {
+	    final->kvc_cached = false;
+	    oc->bh_stat_sub(final);
+	    final->set_length(final->length() + max);
+	    oc->bh_stat_add(final);
+	  }
+	  CacheHeader *nc =  new CacheHeader();
+	  nc->length = max;
+	  nc->key = cur;
+	  kvc->cache_dir[cur] = nc;
+	  left -= max;
+	  cur += max;
+	  continue;
+	}
+	if(ch->first > cur){
+	  max = ch->first - cur;
+	  //not in memory but in leveldb
+	  if (final == NULL) {
+	    final = new BufferHead(this);
+	    final->set_start( cur );
+	    final->set_length( max );
+	    final->kvc_cached = false;
+	    oc->bh_add(this, final);
+	    ldout(oc->cct, 10) << "map_write adding trailing bh " << *final << dendl;
+	  } else {
+	    final->kvc_cached = false;
+	    oc->bh_stat_sub(final);
+	    final->set_length(final->length() + max);
+	    oc->bh_stat_add(final);
+	  }
+	  CacheHeader *nc =  new CacheHeader();
+	  nc->length = max;
+	  nc->key = cur;
+	  kvc->cache_dir[cur] = nc;
+	  left -= max;
+	  cur += max;
+	  continue;
+
+	}
       }
       
       ldout(oc->cct, 10) << "cur is " << cur << ", p is " << *p->second << dendl;
@@ -867,7 +902,7 @@ void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, tid_t tid,
 	/*copy writeback data to memory( bl copy to bh->bl)
 	add KeyValueCache interface here*/
 	kvc->write(bh->bl, bh->start());
-	kvc->cache_dir[bh->start()].length
+	kvc->set_size(kvc->cache_dir[bh->start()].length);
 	bh->kvc_cached = true;
 	mark_clean(bh);
       }
@@ -1401,7 +1436,7 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
       bh->bl.swap(newbl);
 
       kvc->write(bh->bl, bh->start());
-      bh->kvc_inclusive = true;
+      bh->kvc_cached = true;
 
       opos += f_it->second;
     }
