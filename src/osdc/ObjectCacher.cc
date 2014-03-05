@@ -417,55 +417,20 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
 
       // at end ?
       if (p == data.end()) {
-	ch = kvc->dir_lower_bound(cur);
-	if( ch == kvc->cache_dir.end() ){
-	  //not in memory and leveldb
-	  if (final == NULL) {
-	    final = new BufferHead(this);
-	    final->set_start( cur );
-	    final->set_length( max );
-	    final->kvc_cached = false;
-	    oc->bh_add(this, final);
-	    ldout(oc->cct, 10) << "map_write adding trailing bh " << *final << dendl;
-	  } else {
-	    final->kvc_cached = false;
-	    oc->bh_stat_sub(final);
-	    final->set_length(final->length() + max);
-	    oc->bh_stat_add(final);
-	  }
-	  CacheHeader *nc =  new CacheHeader();
-	  nc->length = max;
-	  nc->key = cur;
-	  kvc->cache_dir[cur] = nc;
-	  left -= max;
-	  cur += max;
-	  continue;
+	if (final == NULL) {
+	  final = new BufferHead(this);
+	  final->set_start( cur );
+	  final->set_length( max );
+	  oc->bh_add(this, final);
+	  ldout(oc->cct, 10) << "map_write adding trailing bh " << *final << dendl;
+	} else {
+	  oc->bh_stat_sub(final);
+	  final->set_length(final->length() + max);
+	  oc->bh_stat_add(final);
 	}
-	if(ch->first > cur){
-	  max = ch->first - cur;
-	  //not in memory but in leveldb
-	  if (final == NULL) {
-	    final = new BufferHead(this);
-	    final->set_start( cur );
-	    final->set_length( max );
-	    final->kvc_cached = false;
-	    oc->bh_add(this, final);
-	    ldout(oc->cct, 10) << "map_write adding trailing bh " << *final << dendl;
-	  } else {
-	    final->kvc_cached = false;
-	    oc->bh_stat_sub(final);
-	    final->set_length(final->length() + max);
-	    oc->bh_stat_add(final);
-	  }
-	  CacheHeader *nc =  new CacheHeader();
-	  nc->length = max;
-	  nc->key = cur;
-	  kvc->cache_dir[cur] = nc;
-	  left -= max;
-	  cur += max;
-	  continue;
-
-	}
+	left -= max;
+	cur += max;
+	continue;
       }
       
       ldout(oc->cct, 10) << "cur is " << cur << ", p is " << *p->second << dendl;
@@ -540,7 +505,32 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
   // set versoin
   assert(final);
   ldout(oc->cct, 10) << "map_write final is " << *final << dendl;
-
+  
+  //remap the KeyValueCacher dir 
+  map<loff_t, CacheHeader*>::iterator ch = kvc->dir_lower_bound(final->start());
+  map<loff_t, CacheHeader*>::iterator ch_it;
+  CacheHeader *nc = new CacheHeader();
+  nc->length = final->start();
+  nc->key = final->length();
+  while( ch->first + ch->second->length <= final->start() + final->length() ){
+    if( ch->first == final->start() ){
+      ch.version++;
+    }else if( ch->first < final-start() ){
+    }else{
+      ch.version = 0;
+    }
+    ch++;
+  }
+  if((ch->first < final->start() + final->length()) && (ch->first + ch->second->length > final->start() + final->length())){
+    ch.version = 0;
+    CacheHeader *right_split_ch = new CacheHeader(); //original cache split by this one
+    right_split_ch->length = ch->first + ch->length - final->start() - final->length();
+    right_split_ch->key = final->start()+final->length();
+    right_split_ch->version = 1;
+    right_split_ch->lversion = 0;
+    kvc->cache_dir[final->start()+final->length()] = right_split_ch;
+  }
+  kvc->cache_dir[final->start()] = nc;
   return final;
 }
 
@@ -1434,8 +1424,24 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
 	newbl.substr_of(bh->bl, 0, bhoff);
       newbl.claim_append(frag);
       bh->bl.swap(newbl);
-
-      kvc->write(bh->bl, bh->start());
+      
+      //write to leveldb,we changed version in map_write func, so here we just need to see if the cache in kvc->cache_dir indicates us to change here.
+      map<loff_t, CacheHeader*>::iterator ch = kvc->cache_dir.find(bh->start());
+      int op;
+      while( (op = kvc->cache_dir_op(ch->first)!= NOCHANGE ){
+	switch(op){
+	  case UPDATE:
+	    kvc->write(bh->bl, bh->start());
+	    ch.lversion = version;
+	    ch.length = bh->length();
+	    break;
+	  case DELETE:
+	    kvc->delete(bh->start());
+	    kvc->cache_dir.erase(ch);
+	    break;
+	  }
+	ch++;
+      }
       bh->kvc_cached = true;
 
       opos += f_it->second;

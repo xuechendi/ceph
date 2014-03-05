@@ -31,6 +31,7 @@ class KeyValueCacher {
     class CacheHeader {
     public:
       uint32_t version;
+      uint32_t lversion;
       uint64_t length;
       uint64_t key;
     }
@@ -40,6 +41,7 @@ class KeyValueCacher {
     /*Sync with KeyValueDB*/
     int read(bufferlist *bl, string &kvc_offset);
     int write(bufferlist *bl, string &kvc_offset);
+    int delete(string &kvc_offset);
 
     /*LevelDB function*/
     int open(ostream &out);
