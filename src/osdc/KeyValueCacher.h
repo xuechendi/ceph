@@ -18,6 +18,10 @@
 #include "leveldb/filter_policy.h"
 #endif
 
+#define NOCHANGE 0
+#define UPDATE 1
+#define DELETE 2
+
 class KeyValueCacher {
   private:
     CephContext *cct;
@@ -41,9 +45,35 @@ class KeyValueCacher {
     /*Sync with KeyValueDB*/
     int read(bufferlist *bl, string &kvc_offset);
     int write(bufferlist *bl, string &kvc_offset);
-    int delete(string &kvc_offset);
+    int do_delete(string &kvc_offset);
 
     /*LevelDB function*/
+    /**
+     * find first buffer that includes or follows an offset
+     *
+     * @param offset object byte offset
+     * @return iterator pointing to buffer, or data.end()
+     */
+    map<loff_t,CacheHeader*>::iterator dir_lower_bound(loff_t offset) {
+      map<loff_t,CacheHeader*>::iterator p = cache_dir.lower_bound(offset);
+      if (p != cache_dir.begin() &&(p == cache_dir.end() || p->first > offset)) {
+	--p;     // might overlap!
+      }
+      if (p->first + p->second->length() <= offset){
+	++p;   // doesn't overlap.go back to last p
+      }
+      return p;
+    }
+
+    int cache_dir_op(CacheHeader *ch){
+      int op = NOCHANGE;
+      if(ch->version == 0)
+	op = DELETE;
+      else if(ch->version > ch->lversion)
+	op = UPDATE;
+      return op;
+    }
+
     int open(ostream &out);
     uint64_t get_size(){return stored_data_size}
     void set_size(int32_t change){ stored_data_size += change;}

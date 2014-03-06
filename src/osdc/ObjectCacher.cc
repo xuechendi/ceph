@@ -251,7 +251,7 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
 	  cur += lenfromcur;
 	  left -= lenfromcur;
 	}
-	if(ch->first == cur){//not in memory but in leveldb
+	if(ch->first <= cur){//not in memory but in leveldb
 	  BufferHead *n = new BufferHead(this);
 	  n->set_start(cur);
 	  loff_t lenfromcur = MIN( ch->first + ch->second->length - cur, left );
@@ -510,11 +510,11 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
   map<loff_t, CacheHeader*>::iterator ch = kvc->dir_lower_bound(final->start());
   map<loff_t, CacheHeader*>::iterator ch_it;
   CacheHeader *nc = new CacheHeader();
-  nc->length = final->start();
-  nc->key = final->length();
+  nc->key = final->start();
+  nc->length = final->length();
   while( ch->first + ch->second->length <= final->start() + final->length() ){
     if( ch->first == final->start() ){
-      ch.version++;
+      ch.version++;//need to be equal here for leveldb should fully contain the dir of cache in memory.
     }else if( ch->first < final-start() ){
     }else{
       ch.version = 0;
@@ -1428,7 +1428,7 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
       //write to leveldb,we changed version in map_write func, so here we just need to see if the cache in kvc->cache_dir indicates us to change here.
       map<loff_t, CacheHeader*>::iterator ch = kvc->cache_dir.find(bh->start());
       int op;
-      while( (op = kvc->cache_dir_op(ch->first)!= NOCHANGE ){
+      while( (op = kvc->cache_dir_op(ch)!= NOCHANGE ){
 	switch(op){
 	  case UPDATE:
 	    kvc->write(bh->bl, bh->start());
@@ -1436,7 +1436,7 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
 	    ch.length = bh->length();
 	    break;
 	  case DELETE:
-	    kvc->delete(bh->start());
+	    kvc->do_delete(bh->start());
 	    kvc->cache_dir.erase(ch);
 	    break;
 	  }

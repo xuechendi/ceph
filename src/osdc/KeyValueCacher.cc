@@ -66,3 +66,14 @@ int KeyValueCacher::write((bufferlist &bl, string &kvc_offset, uint64_t origin_l
   }
   return 0;
 }
+
+int KeyValueCacher::do_delete(string &kvc_offset){
+  keys.push_back(kvc_offset);
+  bat.Delete(leveldb::Slice(*(keys.rbegin())));
+  Leveldb::Status status = db->Write(leveldb::WriteOptions(), &bat);
+  if (!status.ok()) {
+    out << status.ToString() << std::endl;
+    return -EINVAL;
+  }
+  return 0;
+}
