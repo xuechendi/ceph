@@ -5,6 +5,7 @@ usage() {
 do_autogen.sh: make a ceph build by running autogen, etc.
 
 -h:                              this help message
+-b                               blkin tracing
 -d <level>                       debug build
                                  level 0: no debug
                                  level 1: -g
@@ -35,6 +36,8 @@ CONFIGURE_FLAGS="--disable-static"
 while getopts  "d:e:hHrTPJjpcvO:" flag
 do
     case $flag in
+    b) CONFIGURE_FLAGS="$CONFIGURE_FLAGS --with-blkin";;
+
     d) debug_level=$OPTARG;;
 
     O) CFLAGS="${CFLAGS} -O$OPTARG";;
