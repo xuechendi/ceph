@@ -1,0 +1,10 @@
+TRACEPOINT_EVENT(mutex, lock,
+    TP_ARGS(
+        const char *, extra_eventname,
+        uint64_t, latency
+    ),
+    TP_FIELDS(
+        ctf_string(extra_eventname, extra_eventname)
+        ctf_integer(uint64_t, latency, latency)
+    )
+)

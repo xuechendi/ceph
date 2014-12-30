@@ -39,6 +39,7 @@
 #include "include/types.h"
 
 #include "osd/osd_types.h"
+#include "osd/OpRequest.h"
 #include "include/color.h"
 #include "include/buffer.h"
 
@@ -51,6 +52,10 @@
 
 #ifdef HAVE_KINETIC
 #include "KineticStore.h"
+#endif
+
+#ifdef WITH_LTTNG
+#include "tracing/keyvaluestore.h"
 #endif
 
 #include "common/ceph_crypto.h"
@@ -1090,6 +1095,13 @@ void KeyValueStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handl
 
   perf_logger->set(l_os_oq_ops, op_queue_len);
   perf_logger->set(l_os_oq_bytes, op_queue_bytes);
+  {
+#ifdef WITH_LTTNG
+  OpRequest * tp_opref = reinterpret_cast<OpRequest *>(o->osd_op.get());
+  if(tp_opref)
+    tracepoint(keyvaluestore, queue_op_start, tp_opref->get_reqid().name._num, tp_opref->get_reqid().tid, op_queue_len );
+#endif
+  }
 }
 
 void KeyValueStore::op_queue_release_throttle(Op *o)
@@ -1109,8 +1121,17 @@ void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
 {
   // FIXME: Suppose the collection of transaction only affect objects in the
   // one PG, so this lock will ensure no other concurrent write operation
+  uint64_t lock_start = ceph_clock_now(g_ceph_context).to_nsec();
   osr->apply_lock.Lock();
+  uint64_t lat = ceph_clock_now(g_ceph_context).to_nsec() - lock_start;
   Op *o = osr->peek_queue();
+  {
+#ifdef WITH_LTTNG
+  OpRequest * tp_opref = reinterpret_cast<OpRequest *>(o->osd_op.get());
+  if(tp_opref)
+    tracepoint(keyvaluestore, opwq_process_start, tp_opref->get_reqid().name._num, tp_opref->get_reqid().tid, lat );
+#endif
+  }
   dout(5) << "_do_op " << o << " seq " << o->op << " " << *osr << "/" << osr->parent << " start" << dendl;
   int r = _do_transactions(o->tls, o->op, &handle);
   dout(10) << "_do_op " << o << " seq " << o->op << " r = " << r
@@ -1124,6 +1145,13 @@ void KeyValueStore::_do_op(OpSequencer *osr, ThreadPool::TPHandle &handle)
       ondisk_finisher.queue(o->ondisk, r);
     }
   }
+  {
+#ifdef WITH_LTTNG
+  OpRequest * tp_opref = reinterpret_cast<OpRequest *>(o->osd_op.get());
+  if(tp_opref)
+    tracepoint(keyvaluestore, opwq_process_finish, tp_opref->get_reqid().name._num, tp_opref->get_reqid().tid );
+#endif
+  }  
 }
 
 void KeyValueStore::_finish_op(OpSequencer *osr)
@@ -1139,6 +1167,13 @@ void KeyValueStore::_finish_op(OpSequencer *osr)
   lat -= o->start;
   perf_logger->tinc(l_os_commit_lat, lat);
   perf_logger->tinc(l_os_apply_lat, lat);
+  {
+#ifdef WITH_LTTNG
+  OpRequest * tp_opref = reinterpret_cast<OpRequest *>(o->osd_op.get());
+  if(tp_opref)
+    tracepoint(keyvaluestore, finish_op, tp_opref->get_reqid().name._num, tp_opref->get_reqid().tid, lat.to_nsec());
+#endif
+  }
 
   if (o->onreadable_sync) {
     o->onreadable_sync->complete(0);
@@ -1205,6 +1240,12 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 
     int op = i.decode_op();
     int r = 0;
+
+    {
+#ifdef WITH_LTTNG
+    tracepoint(keyvaluestore, do_transaction_start, op );
+#endif
+    }
 
     switch (op) {
     case Transaction::OP_NOP:
@@ -1577,11 +1618,15 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
     }
 
     op_num++;
+    {
+#ifdef WITH_LTTNG
+    tracepoint(keyvaluestore, do_transaction_finish, op );
+#endif
+    }
   }
 
   return 0;  // FIXME count errors
 }
-
 
 // =========== KeyValueStore Op Implementation ==============
 // objects

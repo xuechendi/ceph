@@ -131,6 +131,10 @@ endif # LINUX
 
 libcommon_la_SOURCES =
 libcommon_la_LIBADD = $(LIBCOMMON_DEPS) libcommon_api.la
+if WITH_LTTNG
+libcommon_la_LIBADD += $(LIBMUTEX_TP)
+endif
+
 noinst_LTLIBRARIES += libcommon.la
 
 noinst_HEADERS += \

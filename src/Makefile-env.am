@@ -160,6 +160,8 @@ LIBOSD_TP = tracing/libosd_tp.la
 LIBRADOS_TP = tracing/librados_tp.la
 LIBRBD_TP = tracing/librbd_tp.la
 LIBOS_TP = tracing/libos_tp.la
+LIBKEYVALUESTORE_TP = tracing/libkeyvaluestore_tp.la
+LIBMUTEX_TP = tracing/libmutex_tp.la
 
 if WITH_LIBAIO
 LIBOS += -laio

@@ -756,3 +756,55 @@ TRACEPOINT_EVENT(osd, do_osd_op_post,
         ctf_integer_hex(int, result, result)
     )
 )
+
+TRACEPOINT_EVENT(osd, log_op_stats,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc,
+        uint64_t, latency,
+        uint64_t, process_latency),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+        ctf_integer(uint64_t, latency, latency)
+        ctf_integer(uint64_t, process_latency, process_latency)
+    )
+)
+
+TRACEPOINT_EVENT(osd, log_subop_stats,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc,
+        uint64_t, latency),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+        ctf_integer(uint64_t, latency, latency)
+    )
+)
+
+TRACEPOINT_EVENT(osd, eval_repop,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+    )
+)
+

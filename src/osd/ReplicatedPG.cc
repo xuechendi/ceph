@@ -105,6 +105,12 @@ static void log_subop_stats(
     if (subop == l_osd_sop_w) {
       logger->inc(l_osd_sop_w_inb, inb);
       logger->tinc(l_osd_sop_w_lat, latency);
+      {
+#ifdef WITH_LTTNG
+      osd_reqid_t reqid = op->get_reqid();
+      tracepoint(osd, log_subop_stats, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc, latency.to_nsec() );
+#endif
+      }
     } else if (subop == l_osd_sop_push) {
       logger->inc(l_osd_sop_push_inb, inb);
       logger->tinc(l_osd_sop_push_lat, latency);
@@ -2177,6 +2183,12 @@ void ReplicatedPG::log_op_stats(OpContext *ctx)
   osd->logger->inc(l_osd_op_inb, inb);
   osd->logger->tinc(l_osd_op_lat, latency);
   osd->logger->tinc(l_osd_op_process_lat, process_latency);
+  {
+#ifdef WITH_LTTNG
+    osd_reqid_t reqid = ctx->op->get_reqid();
+    tracepoint(osd, log_op_stats, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc, latency.to_nsec(), process_latency.to_nsec());
+#endif
+  }
 
   if (op->may_read() && op->may_write()) {
     osd->logger->inc(l_osd_op_rw);
@@ -7139,6 +7151,12 @@ void ReplicatedPG::eval_repop(RepGather *repop)
     return;
 
   if (m) {
+    {
+#ifdef WITH_LTTNG
+      osd_reqid_t reqid = repop->ctx->op->get_reqid();
+      tracepoint(osd, eval_repop, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc);
+#endif
+    }
 
     // an 'ondisk' reply implies 'ack'. so, prefer to send just one
     // ondisk instead of ack followed by ondisk.

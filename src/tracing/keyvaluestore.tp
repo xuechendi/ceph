@@ -1,0 +1,65 @@
+TRACEPOINT_EVENT(keyvaluestore, opwq_process_start,
+    TP_ARGS(
+        uint64_t, num,
+        uint64_t, tid,
+        uint64_t, get_lock_latency
+    ),
+    TP_FIELDS(
+        ctf_integer(uint64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(uint64_t, get_lock_latency, get_lock_latency)
+    )
+)
+
+TRACEPOINT_EVENT(keyvaluestore, opwq_process_finish,
+    TP_ARGS(
+        uint64_t, num,
+        uint64_t, tid
+    ),
+    TP_FIELDS(
+        ctf_integer(uint64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+    )
+)
+
+TRACEPOINT_EVENT(keyvaluestore, finish_op,
+    TP_ARGS(
+        uint64_t, num,
+        uint64_t, tid,
+        uint64_t, latency),
+    TP_FIELDS(
+        ctf_integer(uint64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(uint64_t, latency, latency)
+    )
+)
+
+TRACEPOINT_EVENT(keyvaluestore, do_transaction_start,
+    TP_ARGS(
+        uint64_t, op_type
+    ),
+    TP_FIELDS(
+        ctf_integer(uint64_t, op_type, op_type)
+    )
+)
+
+TRACEPOINT_EVENT(keyvaluestore, do_transaction_finish,
+    TP_ARGS(
+        uint64_t, op_type
+    ),
+    TP_FIELDS(
+        ctf_integer(uint64_t, op_type, op_type)
+    )
+)
+
+TRACEPOINT_EVENT(keyvaluestore, queue_op_start,
+    TP_ARGS(
+        uint64_t, num,
+        uint64_t, tid,
+        uint64_t, queue_len),
+    TP_FIELDS(
+        ctf_integer(uint64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(uint64_t, queue_len, queue_len)
+    )
+)

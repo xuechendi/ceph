@@ -11,7 +11,9 @@ dist_noinst_DATA = \
 	oprequest.tp \
 	osd.tp \
 	pg.tp \
-	objectstore.tp
+	objectstore.tp \
+        keyvaluestore.tp \
+        mutex.tp
 
 if WITH_LTTNG
 nodist_libosd_tp_la_SOURCES = \
@@ -57,11 +59,33 @@ libos_tp_la_CFLAGS = -I$(top_srcdir)/src $(AM_CFLAGS)
 libos_tp_la_LDFLAGS =
 
 if WITH_LTTNG
+nodist_libkeyvaluestore_tp_la_SOURCES = \
+       keyvaluestore.c \
+       keyvaluestore.h
+endif
+libkeyvaluestore_tp_la_LIBADD = -llttng-ust -ldl
+libkeyvaluestore_tp_la_CPPFLAGS = -DTRACEPOINT_PROBE_DYNAMIC_LINKAGE
+libkeyvaluestore_tp_la_CFLAGS = -I$(top_srcdir)/src $(AM_CFLAGS)
+libkeyvaluestore_tp_la_LDFLAGS =
+
+if WITH_LTTNG
+nodist_libmutex_tp_la_SOURCES = \
+       mutex.c \
+       mutex.h
+endif
+libmutex_tp_la_LIBADD = -llttng-ust -ldl
+libmutex_tp_la_CPPFLAGS = -DTRACEPOINT_PROBE_DYNAMIC_LINKAGE
+libmutex_tp_la_CFLAGS = -I$(top_srcdir)/src $(AM_CFLAGS)
+libmutex_tp_la_LDFLAGS =
+
+if WITH_LTTNG
 noinst_LTLIBRARIES = \
 	libosd_tp.la \
 	librados_tp.la \
 	librbd_tp.la \
-	libos_tp.la
+	libos_tp.la \
+        libkeyvaluestore_tp.la \
+        libmutex_tp.la
 
 BUILT_SOURCES = \
 	librados.h \
@@ -69,11 +93,15 @@ BUILT_SOURCES = \
 	oprequest.h \
 	osd.h \
 	pg.h \
-	objectstore.h
+	objectstore.h \
+        keyvaluestore.h \
+        mutex.h
 endif
 
 CLEANFILES = \
 	$(nodist_libosd_tp_la_SOURCES) \
 	$(nodist_librados_tp_la_SOURCES) \
 	$(nodist_librbd_tp_la_SOURCES) \
-	$(nodist_libos_tp_la_SOURCES)
+	$(nodist_libos_tp_la_SOURCES) \
+        $(nodist_libkeyvaluestore_tp_la_SOURCES) \
+        $(nodist_libmutex_tp_la_SOURCES)

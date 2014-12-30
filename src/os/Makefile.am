@@ -40,6 +40,7 @@ libos_la_CXXFLAGS = ${AM_CXXFLAGS}
 libos_la_LIBADD = $(LIBOS_TYPES)
 if WITH_LTTNG
 libos_la_LIBADD += $(LIBOS_TP)
+libos_la_LIBADD += $(LIBKEYVALUESTORE_TP)
 endif
 
 noinst_LTLIBRARIES += libos.la
