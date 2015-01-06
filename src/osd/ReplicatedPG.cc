@@ -1292,6 +1292,13 @@ void ReplicatedPG::do_request(
 
   switch (op->get_req()->get_type()) {
   case CEPH_MSG_OSD_OP:
+    {
+#ifdef WITH_LTTNG
+    MOSDSubOp *m = static_cast<MOSDSubOp*>(op->get_req());
+    ceph_tid_t rep_tid = m->get_tid();
+    tracepoint(osd, ceph_msg_osd_op, op->get_reqid().name._type, op->get_reqid().name._num, op->get_reqid().tid, op->get_reqid().inc, rep_tid );
+#endif
+    }
     if (is_replay()) {
       dout(20) << " replay, waiting for active on " << op << dendl;
       waiting_for_active.push_back(op);
@@ -7069,6 +7076,12 @@ void ReplicatedPG::repop_all_applied(RepGather *repop)
 {
   dout(10) << __func__ << ": repop tid " << repop->rep_tid << " all applied "
 	   << dendl;
+  {
+#ifdef WITH_LTTNG
+    osd_reqid_t reqid = repop->ctx->op->get_reqid();
+    tracepoint(osd, repop_all_applied, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc);
+#endif
+  }
   repop->all_applied = true;
   if (!repop->rep_aborted) {
     eval_repop(repop);
@@ -7094,6 +7107,12 @@ void ReplicatedPG::repop_all_committed(RepGather *repop)
 {
   dout(10) << __func__ << ": repop tid " << repop->rep_tid << " all committed "
 	   << dendl;
+  {
+#ifdef WITH_LTTNG
+    osd_reqid_t reqid = repop->ctx->op->get_reqid();
+    tracepoint(osd, repop_all_committed, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc);
+#endif
+  }
   repop->all_committed = true;
 
   if (!repop->rep_aborted) {

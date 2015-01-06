@@ -5384,8 +5384,7 @@ void OSD::ms_fast_dispatch(Message *m)
 #ifdef WITH_LTTNG
     osd_reqid_t reqid = op->get_reqid();
 #endif
-    tracepoint(osd, ms_fast_dispatch, reqid.name._type,
-        reqid.name._num, reqid.tid, reqid.inc);
+    tracepoint(osd, ms_fast_dispatch, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc);
   }
   OSDMapRef nextmap = service.get_nextmap_reserved();
   Session *session = static_cast<Session*>(m->get_connection()->get_priv());

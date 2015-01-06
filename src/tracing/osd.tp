@@ -808,3 +808,114 @@ TRACEPOINT_EVENT(osd, eval_repop,
     )
 )
 
+TRACEPOINT_EVENT(osd, repop_all_applied,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+    )
+)
+
+TRACEPOINT_EVENT(osd, repop_all_committed,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+    )
+)
+
+TRACEPOINT_EVENT(osd, op_applied,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+    )
+)
+
+TRACEPOINT_EVENT(osd, op_commit,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+    )
+)
+
+TRACEPOINT_EVENT(osd, ceph_msg_osd_op,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc,
+        uint64_t, rep_tid),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+        ctf_integer(uint64_t, rep_tid, rep_tid)
+    )
+)
+
+TRACEPOINT_EVENT(osd, msg_osd_subop,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc,
+        uint64_t, rep_tid),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+        ctf_integer(uint64_t, rep_tid, rep_tid)
+    )
+)
+
+TRACEPOINT_EVENT(osd, msg_osd_subop_reply,
+    TP_ARGS(
+        // osd_reqid_t
+        uint8_t,  type,
+        int64_t,  num,
+        uint64_t, tid,
+        int32_t,  inc,
+        uint64_t, rep_tid),
+    TP_FIELDS(
+        ctf_integer(uint8_t, type, type)
+        ctf_integer(int64_t, num, num)
+        ctf_integer(uint64_t, tid, tid)
+        ctf_integer(int32_t, inc, inc)
+        ctf_integer(uint64_t, rep_tid, rep_tid)
+    )
+)
+

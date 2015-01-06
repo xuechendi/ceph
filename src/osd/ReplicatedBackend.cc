@@ -19,6 +19,11 @@
 #include "messages/MOSDPGPush.h"
 #include "messages/MOSDPGPull.h"
 #include "messages/MOSDPGPushReply.h"
+#include "osd/OpRequest.h"
+
+#ifdef WITH_LTTNG
+#include "tracing/osd.h"
+#endif
 
 #define dout_subsys ceph_subsys_osd
 #define DOUT_PREFIX_ARGS this
@@ -144,6 +149,12 @@ bool ReplicatedBackend::handle_message(
 
   case MSG_OSD_SUBOP: {
     MOSDSubOp *m = static_cast<MOSDSubOp*>(op->get_req());
+    {
+#ifdef WITH_LTTNG
+    ceph_tid_t rep_tid = m->get_tid();
+    tracepoint(osd, msg_osd_subop, op->get_reqid().name._type, op->get_reqid().name._num, op->get_reqid().tid, op->get_reqid().inc, rep_tid );
+#endif
+    }
     if (m->ops.size() >= 1) {
       OSDOp *first = &m->ops[0];
       switch (first->op.op) {
@@ -165,6 +176,12 @@ bool ReplicatedBackend::handle_message(
 
   case MSG_OSD_SUBOPREPLY: {
     MOSDSubOpReply *r = static_cast<MOSDSubOpReply*>(op->get_req());
+    {
+#ifdef WITH_LTTNG
+    ceph_tid_t rep_tid = r->get_tid();
+    tracepoint(osd, msg_osd_subop_reply, op->get_reqid().name._type, op->get_reqid().name._num, op->get_reqid().tid, op->get_reqid().inc, rep_tid );
+#endif
+    }
     if (r->ops.size() >= 1) {
       OSDOp &first = r->ops[0];
       switch (first.op.op) {
@@ -591,6 +608,11 @@ void ReplicatedBackend::op_applied(
   InProgressOp *op)
 {
   dout(10) << __func__ << ": " << op->tid << dendl;
+  {
+#ifdef WITH_LTTNG
+  tracepoint(osd, op_applied, op->op->get_reqid().name._type, op->op->get_reqid().name._num, op->op->get_reqid().tid, op->op->get_reqid().inc );
+#endif
+  }
   if (op->op)
     op->op->mark_event("op_applied");
 
@@ -611,6 +633,11 @@ void ReplicatedBackend::op_commit(
   InProgressOp *op)
 {
   dout(10) << __func__ << ": " << op->tid << dendl;
+  {
+#ifdef WITH_LTTNG
+  tracepoint(osd, op_commit, op->op->get_reqid().name._type, op->op->get_reqid().name._num, op->op->get_reqid().tid, op->op->get_reqid().inc );
+#endif
+  }
   if (op->op)
     op->op->mark_event("op_commit");
 
