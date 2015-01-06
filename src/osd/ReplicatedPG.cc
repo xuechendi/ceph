@@ -1976,6 +1976,14 @@ void ReplicatedPG::execute_ctx(OpContext *ctx)
   // before we finally apply the resulting transaction.
   delete ctx->op_t;
   ctx->op_t = pgbackend->get_transaction();
+  {
+#ifdef WITH_LTTNG
+      osd_reqid_t reqid = op->get_reqid();
+      ceph_tid_t rep_tid = m->get_tid();
+      tracepoint(osd, eval_repop, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc, rep_tid);
+#endif
+  }
+
 
   if (op->may_write() || op->may_cache()) {
     op->mark_started();
@@ -7173,7 +7181,8 @@ void ReplicatedPG::eval_repop(RepGather *repop)
     {
 #ifdef WITH_LTTNG
       osd_reqid_t reqid = repop->ctx->op->get_reqid();
-      tracepoint(osd, eval_repop, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc);
+      ceph_tid_t rep_tid = m->get_tid();
+      tracepoint(osd, eval_repop, reqid.name._type, reqid.name._num, reqid.tid, reqid.inc, rep_tid);
 #endif
     }
 
