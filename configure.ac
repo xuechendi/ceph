@@ -334,7 +334,8 @@ AC_ARG_WITH([blkin],
 	    [with_blkin=no])
 have_blkin=no
 AS_IF([test "x$with_blkin" == "xyes"],
-    [PKG_CHECK_MODULES([BLKIN], [blkin], [have_blkin=yes])])
+    [AC_CHECK_LIB([blkin-front], [blkin_init_new_trace], [], [AC_MSG_FAILURE([libblkin not found])])])
+#    [PKG_CHECK_MODULES([BLKIN], [blkin-front], [have_blkin=yes])])
 AM_CONDITIONAL(WITH_BLKIN, test "x$have_blkin" == xyes)
 AM_COND_IF([WITH_BLKIN], [AC_DEFINE([WITH_BLKIN], [1], [Defined if using BlkKin])])
 
