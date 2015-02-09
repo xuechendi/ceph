@@ -1868,7 +1868,7 @@ private:
     op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops),
     epoch_barrier(0)
   {
-    BLKIN_MSG_END(objecter, "0.0.0.0", 0, objecter);
+    BLKIN_MSG_END(objecter, "0.0.0.0", 0, "objecter");
   }
   ~Objecter();
 
