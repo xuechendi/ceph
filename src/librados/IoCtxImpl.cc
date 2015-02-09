@@ -28,7 +28,7 @@
 librados::IoCtxImpl::IoCtxImpl() :
   ref_cnt(0), client(NULL), poolid(0), assert_ver(0), last_objver(0),
   notify_timeout(30), aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
-  aio_write_seq(0), objecter(NULL)
+  aio_write_seq(0), objecter(NULL), lock(NULL) 
 {
     BLKIN_MSG_END(ioctx, "0.0.0.0", 0, "ioctx");
 }

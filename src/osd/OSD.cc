@@ -5407,7 +5407,9 @@ void OSD::ms_fast_dispatch(Message *m)
     m->put();
     return;
   }
-  OpRequestRef op = op_tracker.create_request<OpRequest>(m);
+  OpRequestRef op = op_tracker.create_request<OpRequest, Message*>(m);
+  BLKIN_OP_CREATE_TRACE(op, osd, osd_endpoint);
+  BLKIN_OP_TRACE_EVENT(op, osd, waiting_on_osdmap);
   {
 #ifdef WITH_LTTNG
     osd_reqid_t reqid = op->get_reqid();

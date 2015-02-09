@@ -49,6 +49,7 @@ struct librados::IoCtxImpl {
 
   Objecter *objecter;
   BLKIN_END_REF(ioctx_endpoint)
+  Mutex *lock;
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter,
