@@ -19,6 +19,7 @@
 #define tracepoint(...)
 #endif
 
+
 OpRequest::OpRequest(Message *req, OpTracker *tracker) :
   TrackedOp(tracker, req->get_recv_stamp()),
   rmw_flags(0), request(req),
@@ -146,6 +147,9 @@ bool OpRequest::create_osd_trace(TrackedOpEndpointRef ep)
   }
 
   osd_trace = ZTracer::create_ZTrace(name, mt, ep);
+  if(!osd_trace){
+    return false;
+  }
   return true;
 }
 
@@ -162,6 +166,9 @@ bool OpRequest::create_pg_trace(TrackedOpEndpointRef ep)
   }
 
   pg_trace = ZTracer::create_ZTrace(name, mt, ep);
+  if(!pg_trace){
+    return false;
+  }
   return true;
 }
 

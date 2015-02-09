@@ -351,6 +351,7 @@ void TrackedOp::dump(utime_t now, Formatter *f) const
 void TrackedOp::trace_osd(string event)
 {
   if (!osd_trace) {
+    dout(0) << "osd_trace not exists, event: " << event << dendl;
     return;
   }
 
@@ -369,6 +370,11 @@ void TrackedOp::trace_osd(string key, string val)
 void TrackedOp::trace_pg(string event)
 {
   if (!pg_trace) {
+    dout(0) << "pg_trace not exists, event: " << event << dendl;
+    return;
+  }
+  if (!osd_trace) {
+    dout(0) << "osd_trace not exists, event: " << event << dendl;
     return;
   }
 

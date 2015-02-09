@@ -27,6 +27,7 @@ class MOSDSubOp : public Message {
 
 #ifdef WITH_BLKIN
   static const int HEAD_VERSION = 12;
+  static const int COMPAT_VERSION = 3;
 #else
   static const int HEAD_VERSION = 11;
   static const int COMPAT_VERSION = 7;
