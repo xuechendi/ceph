@@ -92,7 +92,7 @@
 
 #define BLKIN_MSG_END(TYPE, IP, PORT, NAME) \
   do { \
-    TYPE ## _endpoint = ZTracer::create_ZTraceEndpoint(IP, PORT, #NAME); \
+    TYPE ## _endpoint = ZTracer::create_ZTraceEndpoint(IP, PORT, NAME); \
   } while(0)
 
 #define BLKIN_MSG_TRACE_EVENT(M, E) do { M->trace(#E); } while(0)
