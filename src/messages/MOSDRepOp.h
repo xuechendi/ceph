@@ -24,8 +24,11 @@
  */
 
 class MOSDRepOp : public Message {
-
+#ifdef WITH_BLKIN
+  static const int HEAD_VERSION = 2;
+#else
   static const int HEAD_VERSION = 1;
+#endif
   static const int COMPAT_VERSION = 1;
 
 public:
@@ -65,6 +68,7 @@ public:
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
+    BLKIN_MSG_DO_INIT_TRACE();
     ::decode(map_epoch, p);
     ::decode(reqid, p);
     ::decode(pgid, p);
@@ -83,6 +87,7 @@ public:
     ::decode(from, p);
     ::decode(updated_hit_set_history, p);
     ::decode(pg_trim_rollback_to, p);
+    BLKIN_MSG_DECODE_TRACE(2);
   }
 
   virtual void encode_payload(uint64_t features) {
@@ -90,6 +95,7 @@ public:
     ::encode(reqid, payload);
     ::encode(pgid, payload);
     ::encode(poid, payload);
+    BLKIN_GET_MASTER(mt);
 
     ::encode(acks_wanted, payload);
     ::encode(version, payload);
@@ -101,6 +107,7 @@ public:
     ::encode(from, payload);
     ::encode(updated_hit_set_history, payload);
     ::encode(pg_trim_rollback_to, payload);
+    BLKIN_MSG_ENCODE_TRACE();
   }
 
   MOSDRepOp()
@@ -132,6 +139,8 @@ public:
       out << ", has_updated_hit_set_history";
     out << ")";
   }
+
+  BLKIN_MSG_END_DECL(MOSDRepOp)
 };
 
 

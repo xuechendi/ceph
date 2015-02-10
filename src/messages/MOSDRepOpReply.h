@@ -29,7 +29,11 @@
  */
 
 class MOSDRepOpReply : public Message {
+#ifdef WITH_BLKIN
+  static const int HEAD_VERSION = 2;
+#else
   static const int HEAD_VERSION = 1;
+#endif
   static const int COMPAT_VERSION = 1;
 public:
   epoch_t map_epoch;
@@ -49,6 +53,7 @@ public:
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
+    BLKIN_MSG_DO_INIT_TRACE();
     ::decode(map_epoch, p);
     ::decode(reqid, p);
     ::decode(pgid, p);
@@ -58,8 +63,11 @@ public:
     ::decode(last_complete_ondisk, p);
 
     ::decode(from, p);
+    BLKIN_MSG_DECODE_TRACE(2);
   }
   virtual void encode_payload(uint64_t features) {
+    BLKIN_GET_MASTER(mt);
+    
     ::encode(map_epoch, payload);
     ::encode(reqid, payload);
     ::encode(pgid, payload);
@@ -67,6 +75,8 @@ public:
     ::encode(result, payload);
     ::encode(last_complete_ondisk, payload);
     ::encode(from, payload);
+    
+    BLKIN_MSG_ENCODE_TRACE();
   }
 
   epoch_t get_map_epoch() { return map_epoch; }
@@ -93,6 +103,7 @@ public:
     ack_type(at),
     result(result_) {
     set_tid(req->get_tid());
+    BLKIN_MSG_CHECK_SPAN();
   }
   MOSDRepOpReply() : Message(MSG_OSD_REPOPREPLY) {}
 private:
@@ -113,7 +124,8 @@ public:
     out << ", result = " << result;
     out << ")";
   }
-
+  
+  BLKIN_MSG_END_DECL(MOSDRepOpReply)
 };
 
 
