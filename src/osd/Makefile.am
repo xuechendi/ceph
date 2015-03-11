@@ -30,6 +30,12 @@ libosd_a_CXXFLAGS = ${AM_CXXFLAGS}
 libosd_a_LIBADD =
 noinst_LIBRARIES += libosd.a
 
+if WITH_BLKIN
+libosd_a_CPPFLAGS = $(AM_CPPFLAGS) -DWITH_BLKIN
+libosd_a_CXXFLAGS += $(BLKIN_CFLAGS)
+#libosd_a_LIBADD += $(BLKIN_LIBS)
+endif
+
 noinst_HEADERS += \
 	osd/ClassHandler.h \
 	osd/HitSet.h \

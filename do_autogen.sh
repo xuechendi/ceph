@@ -6,6 +6,8 @@ do_autogen.sh: make a ceph build by running autogen, etc.
 
 -C <parameter>                   add parameters to configure
 -c                               use cryptopp
+-h:                              this help message
+-b                               blkin tracing
 -d <level>                       debug build
                                  level 0: no debug
                                  level 1: -g
@@ -36,11 +38,12 @@ verbose=0
 profile=0
 rocksdb=1
 CONFIGURE_FLAGS="--disable-static --with-lttng"
-while getopts  "C:cd:e:hjJLO:pPRTv" flag
+while getopts  "bC:cd:e:hjJLO:pPRTv" flag
 do
     case $flag in
     C) CONFIGURE_FLAGS="$CONFIGURE_FLAGS $OPTARG";;
     c) CONFIGURE_FLAGS="$CONFIGURE_FLAGS --with-cryptopp --without-nss";;
+    b) CONFIGURE_FLAGS="$CONFIGURE_FLAGS --with-blkin";;
     d) debug_level=$OPTARG;;
     e) encode_dump=$OPTARG;;
     h) usage ; exit 0;;

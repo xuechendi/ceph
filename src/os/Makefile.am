@@ -52,6 +52,11 @@ libos_a_LIBADD += $(LIBOS_TP)
 endif
 
 noinst_LIBRARIES += libos.a
+if WITH_BLKIN
+libos_a_CPPFLAGS = $(AM_CPPFLAGS) -DWITH_BLKIN
+libos_a_CXXFLAGS += $(BLKIN_CFLAGS)
+#libos_a_LIBADD += $(BLKIN_LIBS)
+endif
 
 noinst_HEADERS += \
 	os/btrfs_ioctl.h \

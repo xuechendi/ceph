@@ -22,6 +22,12 @@ libmon_a_SOURCES = \
 libmon_a_LIBADD =
 noinst_LIBRARIES += libmon.a
 
+if WITH_BLKIN
+libmon_a_CPPFLAGS = $(AM_CPPFLAGS) -DWITH_BLKIN
+libmon_a_CXXFLAGS = $(AM_CXXFLAGS) $(BLKIN_CFLAGS)
+#libmon_a_LIBADD += $(BLKIN_LIBS)
+endif
+
 noinst_HEADERS += \
 	mon/AuthMonitor.h \
 	mon/DataHealthService.h \
