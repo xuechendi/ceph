@@ -3888,6 +3888,8 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   PGBackend::PGTransaction* t = ctx->op_t;
 
   dout(10) << "do_osd_op " << soid << " " << ops << dendl;
+  OpRequestRef op_ref = ctx->op;
+  op_ref->pg_trace.event("do_osd_ops");
 
   for (vector<OSDOp>::iterator p = ops.begin(); p != ops.end(); ++p, ctx->current_osd_subop_num++) {
     OSDOp& osd_op = *p;
@@ -3955,6 +3957,9 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	       << " -> TRUNCATE " << op.extent.offset << " (old size is " << oi.size << ")" << dendl;
       op.op = CEPH_OSD_OP_TRUNCATE;
     }
+    op_ref->pg_trace.keyval("op_type", op.op );
+    op_ref->pg_trace.keyval("op_extend_offset", op.extent.offset );
+    op_ref->pg_trace.keyval("op_extend_length", op.extent.length );
 
     switch (op.op) {
       
