@@ -266,7 +266,9 @@ private:
     void queue(Op *o) {
       Mutex::Locker l(qlock);
       q.push_back(o);
-      o->trace.keyval("queue depth", q.size());
+      std::stringstream ss;
+      ss << "osr enqueue depth";
+      o->trace.keyval(ss.str().c_str(), q.size());
     }
     Op *peek_queue() {
       Mutex::Locker l(qlock);
@@ -278,7 +280,11 @@ private:
       assert(to_queue);
       assert(apply_lock.is_locked());
       Mutex::Locker l(qlock);
+      unsigned size = q.size();
       Op *o = q.front();
+      std::stringstream ss;
+      ss << "osr dequeue depth";
+      o->trace.keyval(ss.str().c_str(), size);
       q.pop_front();
       cond.Signal();
 

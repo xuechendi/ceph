@@ -8353,6 +8353,22 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
       priority, cost, item);
   sdata->sdata_op_ordering_lock.Unlock();
 
+  for(unsigned int i=0; i < shard_list.size(); i++){
+    ShardData* ss = shard_list[i];
+    int l1 = ss->get_pqueue_length();
+    int l2 = ss->pg_queue_length();
+    int l = l1 + l2;
+    stringstream sss;
+    sss << i;
+    string name = string("shard ") + sss.str();
+    string pqueue_name = name + string(" queue");
+    string pg_process = name + string(" pg process");
+    boost::optional<OpRequestRef> _op = item.second.maybe_get_op();
+    (*_op)->osd_trace.keyval(name.c_str(), l);
+    (*_op)->osd_trace.keyval(pqueue_name.c_str(), l1);
+    (*_op)->osd_trace.keyval(pg_process.c_str(), l2);
+  }
+
   sdata->sdata_lock.Lock();
   sdata->sdata_cond.SignalOne();
   sdata->sdata_lock.Unlock();

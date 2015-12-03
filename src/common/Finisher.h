@@ -54,6 +54,7 @@ class Finisher {
   /// Performance counter for the finisher's queue length.
   /// Only active for named finishers.
   PerfCounters *logger;
+  string finisher_name;
   
   void *finisher_thread_entry();
 
@@ -89,6 +90,15 @@ class Finisher {
       logger->inc(l_finisher_queue_len, ls.size());
     finisher_lock.Unlock();
     ls.clear();
+  }
+  int get_queue_depth() {
+    finisher_lock.Lock();
+    int size = finisher_queue.size();
+    finisher_lock.Unlock();
+    return size;
+  }
+  string get_name() {
+    return finisher_name;
   }
   void queue(deque<Context*>& ls) {
     finisher_lock.Lock();
@@ -135,7 +145,9 @@ class Finisher {
     cct(cct_), finisher_lock("Finisher::finisher_lock"),
     finisher_stop(false), finisher_running(false),
     logger(0),
-    finisher_thread(this) {}
+    finisher_thread(this) {
+      finisher_name = string("finisher");
+    }
 
   /// Construct a named Finisher that logs its queue length.
   Finisher(CephContext *cct_, string name) :
@@ -149,6 +161,7 @@ class Finisher {
     logger = b.create_perf_counters();
     cct->get_perfcounters_collection()->add(logger);
     logger->set(l_finisher_queue_len, 0);
+    finisher_name = string("finisher-") + name;
   }
 
   ~Finisher() {
