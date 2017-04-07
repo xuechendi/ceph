@@ -52,6 +52,7 @@ private:
   int discard(uint64_t offset, uint64_t length, bool fdatasync);
   int truncate(uint64_t length, bool fdatasync);
   int fdatasync();
+  uint64_t filesize();
 };
 
 } // namespace file

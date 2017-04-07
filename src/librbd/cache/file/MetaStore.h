@@ -21,7 +21,11 @@ class MetaStore {
 public:
   MetaStore(ImageCtxT &image_ctx, uint32_t block_size);
 
-  void init(Context *on_finish);
+  void init(bufferlist *bl, Context *on_finish);
+  void reset(Context *on_finish);
+  void write_block(uint64_t cache_block, bufferlist bl, Context *on_finish);
+  void read_block(uint64_t cache_block, bufferlist *bl, Context *on_finish);
+  void load_all(ExtentBuffers *extent_buffers, Context *on_finish);
   void shut_down(Context *on_finish);
 
   inline uint64_t offset_to_block(uint64_t offset) {
