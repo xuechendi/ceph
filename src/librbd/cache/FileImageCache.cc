@@ -224,20 +224,23 @@ template <typename I>
 struct C_WriteToMetaRequest : public C_BlockIORequest {
   MetaStore<I> &meta_store;
   uint64_t cache_block_id;
-  const bufferlist &bl;
+  Policy *policy;
 
   C_WriteToMetaRequest(CephContext *cct, MetaStore<I> &meta_store,
-		                uint64_t cache_block_id, const bufferlist &bl,
+		                uint64_t cache_block_id, Policy *policy,
                         C_BlockIORequest *next_block_request)
     : C_BlockIORequest(cct, next_block_request), meta_store(meta_store),
-    cache_block_id(cache_block_id), bl(bl) {
+    policy(policy), cache_block_id(cache_block_id) {
   }
 
   virtual void send() override {
     ldout(cct, 20) << "(" << get_name() << "): "
                    << "cache_block_id=" << cache_block_id << dendl;
 
-    meta_store.write_block(cache_block_id, bl, this);
+    bufferlist meta_bl;
+    policy->entry_to_bufferlist(cache_block_id, &meta_bl);
+    ldout(cct, 20) << "entry_to_bufferlist bl:" << meta_bl << dendl;
+    meta_store.write_block(cache_block_id, std::move(meta_bl), this);
   }
   virtual const char *get_name() const override {
     return "C_WriteToMetaRequest";
@@ -576,10 +579,6 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
     // NOTE: block guard active -- must be released after IO completes
     C_BlockIORequest *req = new C_ReleaseBlockGuard(cct, block_io.block,
                                                          release_block, this);
-	// TODO: persistent metadata
-	bufferlist bl;
-	policy.entry_to_bufferlist(block_io.block, &bl);
-	req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, bl, req);
 
     if (policy_map_result == POLICY_MAP_RESULT_MISS) {
       req = new C_WriteToImageRequest<I>(cct, image_writeback,
@@ -587,6 +586,8 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
     } else {
       // block is now dirty -- can't be replaced until flushed
       policy.set_dirty(block_io.block);
+	  // TODO: persistent metadata
+	  req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, req);
 
       if (block_io.partial_block) {
         // block needs to be promoted to cache but we require a
@@ -927,7 +928,7 @@ void FileImageCache<I>::init(Context *on_finish) {
       m_journal_store->init(ctx);
     });
   ctx = new FunctionContext(
-    [this, meta_bl, ctx](int r) {
+    [this, meta_bl, ctx](int r) mutable {
       if (r < 0) {
         ctx->complete(r);
         return;
