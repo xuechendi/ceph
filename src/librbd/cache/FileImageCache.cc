@@ -119,7 +119,7 @@ struct C_PromoteToCache : public BlockGuard::C_BlockIORequest {
   }
 
   virtual void send() override {
-    ldout(cct, 20) << "(" << get_name() << "): "
+    ldout(cct, 1) << "(" << get_name() << "): "
                    << "block=" << block_io.block << dendl;
     // promote the clean block to the cache
     bufferlist sub_bl;
@@ -247,7 +247,7 @@ struct C_WriteToMetaRequest : public BlockGuard::C_BlockIORequest {
   }
 
   virtual void send() override {
-    ldout(cct, 20) << "(" << get_name() << "): "
+    ldout(cct, 1) << "(" << get_name() << "): "
                    << "cache_block_id=" << cache_block_id << dendl;
 
     bufferlist meta_bl;
