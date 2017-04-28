@@ -6,7 +6,7 @@
 
 #include "librbd/cache/Types.h"
 #include "include/int_types.h"
-#include "librbd/cache/file/AioFile.h"
+#include "librbd/cache/file/SyncFile.h"
 #include "common/Mutex.h"
 
 struct Context;
@@ -44,7 +44,7 @@ private:
   uint32_t m_block_size;
   uint32_t m_entry_size;
 
-  AioFile<ImageCtx> m_meta_file;
+  SyncFile<ImageCtx> m_aio_file;
 
 };
 

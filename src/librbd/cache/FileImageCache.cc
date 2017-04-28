@@ -631,7 +631,7 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
         // block is now dirty -- can't be replaced until flushed
         policy.set_dirty(block_io.block);
       }
-      req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, req);
+      //req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, req);
 
       IOType io_type = static_cast<IOType>(block_io.io_type);
       if ((io_type == IO_TYPE_WRITE || io_type == IO_TYPE_DISCARD) &&
@@ -1181,7 +1181,7 @@ void FileImageCache<I>::release_block(uint64_t block) {
 
   Mutex::Locker locker(m_lock);
   m_block_guard.release(block, &m_detained_block_ios);
-  wake_up();
+  //wake_up();
 }
 
 template <typename I>
@@ -1214,12 +1214,12 @@ void FileImageCache<I>::wake_up() {
 template <typename I>
 void FileImageCache<I>::process_work() {
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 20) << dendl;
+  ldout(cct, 1) << dendl;
 
   do {
-    process_writeback_dirty_blocks();
-    process_detained_block_ios();
-    process_deferred_block_ios();
+    //process_writeback_dirty_blocks();
+    //process_detained_block_ios();
+    //process_deferred_block_ios();
 
     // TODO
     Contexts post_work_contexts;
@@ -1290,7 +1290,7 @@ void FileImageCache<I>::process_detained_block_ios() {
   }
 
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 20) << "block_ios=" << block_ios.size() << dendl;
+  ldout(cct, 1) << "block_ios=" << block_ios.size() << dendl;
   for (auto &block_io : block_ios) {
     map_block(false, std::move(block_io));
   }
