@@ -44,7 +44,7 @@ private:
   uint32_t m_block_size;
   uint32_t m_entry_size;
 
-  SyncFile<ImageCtx> m_aio_file;
+  SyncFile<ImageCtx> m_meta_file;
 
 };
 

@@ -28,7 +28,7 @@ public:
 
   // TODO use scatter/gather API
 
-  void open(Context *on_finish);
+  void open(Context *on_finish, bool sync_flag = true);
   void close(Context *on_finish);
 
   void read(uint64_t offset, uint64_t length, ceph::bufferlist *bl,

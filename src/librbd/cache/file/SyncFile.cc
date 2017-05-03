@@ -39,10 +39,13 @@ SyncFile<I>::~SyncFile() {
 }
 
 template <typename I>
-void SyncFile<I>::open(Context *on_finish) {
+void SyncFile<I>::open(Context *on_finish, bool sync_flag) {
   while (true) {
-    m_fd = ::open(m_name.c_str(), O_CREAT | O_NOATIME | O_RDWR | O_SYNC,
-                  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+    int flag = O_CREAT | O_NOATIME | O_RDWR | O_SYNC;
+    if (!sync_flag){
+        flag = O_CREAT | O_NOATIME | O_RDWR;
+    }
+    m_fd = ::open(m_name.c_str(), flag, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     if (m_fd == -1) {
       int r = -errno;
       if (r == -EINTR) {
@@ -122,7 +125,7 @@ int SyncFile<I>::write(uint64_t offset, const ceph::bufferlist &bl,
                       bool sync) {
   sync = false;
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 20) << "offset=" << offset << ", "
+  ldout(cct, 1) << "offset=" << offset << ", "
                  << "length=" << bl.length() << dendl;
 
   int r = bl.write_fd(m_fd, offset);

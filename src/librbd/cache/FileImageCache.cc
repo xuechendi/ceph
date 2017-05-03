@@ -120,7 +120,7 @@ struct C_PromoteToCache : public BlockGuard::C_BlockIORequest {
 
   virtual void send() override {
     ldout(cct, 1) << "(" << get_name() << "): "
-                   << "block=" << block_io.block << dendl;
+                   << "block=" << block_io.block << " bl=" << bl << dendl;
     // promote the clean block to the cache
     bufferlist sub_bl;
     if(bl.length() > BLOCK_SIZE) {
@@ -247,7 +247,7 @@ struct C_WriteToMetaRequest : public BlockGuard::C_BlockIORequest {
   }
 
   virtual void send() override {
-    ldout(cct, 1) << "(" << get_name() << "): "
+    ldout(cct, 20) << "(" << get_name() << "): "
                    << "cache_block_id=" << cache_block_id << dendl;
 
     bufferlist meta_bl;
@@ -631,21 +631,21 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
         // block is now dirty -- can't be replaced until flushed
         policy.set_dirty(block_io.block);
       }
-      //req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, req);
-
-      IOType io_type = static_cast<IOType>(block_io.io_type);
-      if ((io_type == IO_TYPE_WRITE || io_type == IO_TYPE_DISCARD) &&
-          block_io.tid == 0) {
-        // TODO support non-journal mode / writethrough-only
-        int r = journal_store.allocate_tid(&block_io.tid);
-        if (r < 0) {
-          ldout(cct, 20) << "journal full -- detaining block IO" << dendl;
-          append_detain_block(block_io);
-          return;
-        }
-      }
+      req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, req);
 
       if (block_io.partial_block) {
+        IOType io_type = static_cast<IOType>(block_io.io_type);
+        if ((io_type == IO_TYPE_WRITE || io_type == IO_TYPE_DISCARD) &&
+            block_io.tid == 0) {
+          // TODO support non-journal mode / writethrough-only
+          int r = journal_store.allocate_tid(&block_io.tid);
+          if (r < 0) {
+            ldout(cct, 20) << "journal full -- detaining block IO" << dendl;
+            append_detain_block(block_io);
+            return;
+          }
+        }
+
         // block needs to be promoted to cache but we require a
         // read-modify-write cycle to fully populate the block
 
@@ -680,11 +680,11 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
         }
       } else {
         // full block overwrite
-        if (block_io.tid > 0) {
+        /*if (block_io.tid > 0) {
           req = new C_AppendEventToJournal<I>(cct, journal_store, block_io.tid,
                                               block_io.block, IO_TYPE_WRITE,
                                               req);
-        }
+        }*/
 
         req = new C_PromoteToCache<I>(cct, image_store, block_io,
                                       bl, req);
