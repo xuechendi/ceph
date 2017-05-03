@@ -10,16 +10,19 @@ namespace file {
 
 namespace stupid_policy {
 void Entry_t::encode(bufferlist& bl) const {
-  ENCODE_START(1, 1, bl);
-  ::encode(dirty, bl);
-  ::encode(block, bl);
-  ENCODE_FINISH(bl);
+  //ENCODE_START(1, 1, bl);
+  uint64_t tmp;
+  tmp = dirty << 56 & block;
+  bl.push_back(buffer::copy((char*)&tmp, sizeof(uint64_t)));
+  //ENCODE_FINISH(bl);
 }
 
 void Entry_t::decode(bufferlist::iterator& it) {
   DECODE_START(1, it);
-  ::decode(dirty, it);
-  ::decode(block, it);
+  uint64_t tmp;
+  ::decode(tmp, it);
+  dirty = block >> 56;
+  block = tmp & 0x0FFFFFFF;
   DECODE_FINISH(it);
 }
 

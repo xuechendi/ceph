@@ -41,7 +41,7 @@ void MetaStore<I>::init(bufferlist *bl, Context *on_finish) {
         load_all(bl, on_finish);
       }
     });
-  m_meta_file.open(ctx);
+  m_meta_file.open(ctx, false);
 }
 
 template <typename I>

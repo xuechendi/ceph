@@ -264,7 +264,7 @@ void StupidPolicy<I>::tick() {
 
 template <typename I>
 int StupidPolicy<I>::get_entry_size() {
-  return sizeof(struct Entry);
+  return sizeof(uint64_t);
 }
 
 template <typename I>
@@ -281,7 +281,7 @@ void StupidPolicy<I>::entry_to_bufferlist(uint64_t block, bufferlist *bl){
   entry.encode(encode_bl);
   bl->append(encode_bl);
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 20) << "block=" << block << " bl=" << *bl << dendl;
+  ldout(cct, 1) << "block=" << block << " encode_bl=" << encode_bl << dendl;
 }
 
 template <typename I>
