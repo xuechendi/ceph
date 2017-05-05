@@ -88,10 +88,10 @@ struct C_ReleaseBlockGuard : public BlockGuard::C_BlockIORequest {
   virtual void finish(int r) override {
     ldout(cct, 1) << "(" << get_name() << "): block_io = " << block_io.block << ", r=" << r << dendl;
 
-    if(next_block_request == nullptr 
+    if(next_block_request == nullptr
 	&& block_io.tail_block_io_request == this) {
       block_io.tail_block_io_request = nullptr;
-      block_io.in_process = false;
+      block_io.finish_process();
     }
     // IO operation finished -- release guard
     release_block(block);
@@ -544,14 +544,14 @@ struct C_ReadBlockRequest : public BlockGuard::C_BlockRequest {
     if(orig_tail_block_io_req != nullptr)
       orig_tail_block_io_req->next_block_request = req;
     if(!block_io.in_process) {
-      ldout(cct, 20) << "block_io: "<< block_io.block << " is not in process, will schedule" << dendl;
+      ldout(cct, 1) << "block_io: "<< block_io.block << " is not in process, will schedule" << dendl;
       block_io.in_process = true;
-      image_ctx.pcache_op_work_queue->queue(new FunctionContext( 
+      image_ctx.pcache_op_work_queue->queue(new FunctionContext(
         [req](int r) {
 	  req->send();
 	}), 0);
     }else{
-      ldout(cct, 20) << "block_io: "<< block_io.block << " is in process, skip schedule" << dendl;
+      ldout(cct, 1) << "block_io: "<< block_io.block << " is in process, skip schedule" << dendl;
     }
     //req->send();
   }
@@ -701,10 +701,10 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
       orig_tail_block_io_req->next_block_request = req;
     if(!block_io.in_process) {
       ldout(cct, 1) << "block_io: "<< block_io.block << " is not in process, will schedule" << dendl;
-      block_io.in_process = true;
-      image_ctx.pcache_op_work_queue->queue(new FunctionContext( 
-        [req](int r) { 
-	  req->send(); 
+      block_io.start_process();
+      image_ctx.pcache_op_work_queue->queue(new FunctionContext(
+        [req](int r) {
+	  req->send();
 	}), 0);
     }else{
       ldout(cct, 1) << "block_io: "<< block_io.block << " is in process, will skip schedule" << dendl;
@@ -868,8 +868,8 @@ FileImageCache<I>::FileImageCache(ImageCtx &image_ctx)
   ThreadPoolSingleton *thread_pool_singleton;
   cct->lookup_or_create_singleton_object<ThreadPoolSingleton>(
     thread_pool_singleton, "librbd::cache::thread_pool");
-  m_image_ctx.pcache_op_work_queue = thread_pool_singleton->pcache_op_work_queue; 
-  
+  m_image_ctx.pcache_op_work_queue = thread_pool_singleton->pcache_op_work_queue;
+
 }
 
 template <typename I>
@@ -1129,7 +1129,7 @@ void FileImageCache<I>::map_blocks(IOType io_type, Extents &&image_extents,
 
   // map block IO requests to the cache or backing image based upon policy
   for (auto &block_io : block_ios) {
-    map_block(true, std::move(block_io));
+    map_block(false, std::move(block_io));
   }
 
   // advance the policy statistics
@@ -1179,8 +1179,8 @@ void FileImageCache<I>::release_block(uint64_t block) {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 20) << "block=" << block << dendl;
 
-  Mutex::Locker locker(m_lock);
-  m_block_guard.release(block, &m_detained_block_ios);
+  //Mutex::Locker locker(m_lock);
+  //m_block_guard.release(block, &m_detained_block_ios);
   //wake_up();
 }
 
@@ -1214,7 +1214,7 @@ void FileImageCache<I>::wake_up() {
 template <typename I>
 void FileImageCache<I>::process_work() {
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 1) << dendl;
+  ldout(cct, 20) << dendl;
 
   do {
     //process_writeback_dirty_blocks();
@@ -1290,7 +1290,7 @@ void FileImageCache<I>::process_detained_block_ios() {
   }
 
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 1) << "block_ios=" << block_ios.size() << dendl;
+  ldout(cct, 20) << "block_ios=" << block_ios.size() << dendl;
   for (auto &block_io : block_ios) {
     map_block(false, std::move(block_io));
   }

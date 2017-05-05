@@ -116,7 +116,7 @@ int BlockGuard::release(uint64_t block, BlockIOs *block_ios) {
   assert(detained_block_it != m_detained_blocks.end());
 
   auto &detained_block = *detained_block_it;
-  ldout(m_cct, 1) << "block=" << block << ", "
+  ldout(m_cct, 20) << "block=" << block << ", "
                    << "pending_ios="
                    << (detained_block.block_ios.empty() ?
                         0 : detained_block.block_ios.size() - 1) << ", "
