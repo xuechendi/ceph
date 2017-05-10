@@ -8,12 +8,13 @@ namespace librbd {
 namespace cache {
 namespace file {
 
-namespace stupid_policy {
+namespace simplelog_policy {
 void Entry_t::encode(bufferlist& bl) const {
   //ENCODE_START(1, 1, bl);
   uint64_t tmp = (uint64_t)dirty;
   tmp = tmp << 56 | block;
   bl.push_back(buffer::copy((char*)&tmp, sizeof(uint64_t)));
+  bl.push_back(buffer::copy((char*)&on_disk_off, sizeof(uint64_t)));
   //ENCODE_FINISH(bl);
 }
 
@@ -21,6 +22,7 @@ void Entry_t::decode(bufferlist::iterator& it) {
   DECODE_START(1, it);
   uint64_t tmp;
   ::decode(tmp, it);
+  ::decode(on_disk_off, it);
   dirty = block >> 56;
   block = tmp & 0x0FFFFFFFFFFFFFFF;
   DECODE_FINISH(it);

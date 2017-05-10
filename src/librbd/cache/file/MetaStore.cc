@@ -98,7 +98,7 @@ void MetaStore<I>::load_all(bufferlist *bl, Context *on_finish) {
         return;
       }
   });
-  for(uint64_t block_id = 0; block_id < offset_to_block(m_image_ctx.size); block_id++){
+  for(uint64_t block_id = 0; block_id < (m_image_ctx.size/BLOCK_SIZE); block_id++){
     read_block(block_id, bl, ctx);
     if (bl->is_zero()) break;
   }

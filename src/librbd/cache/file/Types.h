@@ -28,6 +28,7 @@ namespace stupid_policy {
 struct Entry_t {
   bool dirty = false;
   uint64_t block = 0;
+  uint64_t on_disk_off = 0;
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& it);

@@ -92,6 +92,7 @@ private:
 
   bool is_work_available() const;
   void process_writeback_dirty_blocks();
+  void process_writeback_blocks(BlockGuard::BlockIO *block_io);
   void process_detained_block_ios();
   void process_deferred_block_ios();
 

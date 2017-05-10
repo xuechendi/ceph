@@ -44,7 +44,7 @@ public:
     virtual void finish(int r) override;
 
     virtual void remap(PolicyMapResult policy_map_result,
-                       BlockIO &&block_io) = 0;
+                       BlockIO &&block_io, uint64_t on_disk_offset) = 0;
   };
 
   struct BlockIOExtent {
@@ -102,6 +102,7 @@ public:
 
     uint64_t tid;
     uint64_t block;
+    uint64_t on_disk_off;
     BlockIOExtents extents;
 
     IOType io_type : 2;     ///< IO type for deferred IO request

@@ -71,7 +71,7 @@ void ImageStore<I>::read_block(uint64_t cache_block,
   // TODO add gather support
   assert(block_extents.size() == 1);
   auto &extent = block_extents.front();
-  m_cache_file.read(m_metastore.block_to_offset(cache_block) + extent.first,
+  m_cache_file.read(cache_block + extent.first,
                     extent.second, bl, on_finish);
 }
 
@@ -91,7 +91,7 @@ void ImageStore<I>::write_block(uint64_t cache_block,
     sub_bl.substr_of(bl, buffer_offset, extent.second);
     buffer_offset += extent.second;
 
-    m_cache_file.write(m_metastore.block_to_offset(cache_block) + extent.first,
+    m_cache_file.write(cache_block + extent.first,
                        std::move(sub_bl), false, ctx->new_sub());
 
   }

@@ -11,7 +11,7 @@
 #include "librbd/cache/file/ImageStore.h"
 #include "librbd/cache/file/JournalStore.h"
 #include "librbd/cache/file/MetaStore.h"
-#include "librbd/cache/file/StupidPolicy.h"
+#include "librbd/cache/file/SimpleLogPolicy.h"
 #include "librbd/cache/file/Types.h"
 #include <map>
 #include <vector>
@@ -238,9 +238,10 @@ struct C_WriteToMetaRequest : public BlockGuard::C_BlockIORequest {
   MetaStore<I> &meta_store;
   uint64_t cache_block_id;
   Policy *policy;
+  bool write_back;
 
   C_WriteToMetaRequest(CephContext *cct, MetaStore<I> &meta_store,
-		                uint64_t cache_block_id, Policy *policy,
+		        uint64_t cache_block_id, Policy *policy,
                         C_BlockIORequest *next_block_request)
     : C_BlockIORequest(cct, next_block_request), meta_store(meta_store),
     cache_block_id(cache_block_id), policy(policy) {
@@ -496,8 +497,8 @@ struct C_ReadBlockRequest : public BlockGuard::C_BlockRequest {
   }
 
   virtual void remap(PolicyMapResult policy_map_result,
-                     BlockGuard::BlockIO &&block_io) {
-    assert(block_io.tid == 0);
+                     BlockGuard::BlockIO &&block_io,
+                     uint64_t on_disk_off) {
     CephContext *cct = image_ctx.cct;
 
     // TODO: consolidate multiple reads into a single request (i.e. don't
@@ -604,13 +605,11 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
   }
 
   virtual void remap(PolicyMapResult policy_map_result,
-                     BlockGuard::BlockIO &&block_io) {
+                     BlockGuard::BlockIO &&block_io,
+                     uint64_t on_disk_off) {
     CephContext *cct = image_ctx.cct;
 
-    // TODO: consolidate multiple writes into a single request (i.e. don't
-    // have 1024 4K requests to read a single object)
-
-    // NOTE: block guard active -- must be released after IO completes
+    bool write_back = policy.get_write_modes()?true:false;
     BlockGuard::C_BlockIORequest *req = new C_ReleaseBlockGuard(cct, block_io.block,
                                                          release_block, this, std::move(block_io));
     BlockGuard::C_BlockIORequest *orig_tail_block_io_req = nullptr;
@@ -623,16 +622,17 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
       req = new C_WriteToImageRequest<I>(cct, image_writeback,
                                          std::move(block_io), bl, req);
     } else {
-      if (0 == policy.get_write_mode()) {
+      req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, write_back, req);
+      if (!write_back) {
         //write-thru
+        MetaInfo meta_info(block_io.block, false);
+        req = new C_UpdateToMemMetaRequest<I>(cct, &policy, meta_info, req);
         req = new C_WriteToImageRequest<I>(cct, image_writeback,
                                            std::move(block_io), bl, req);
-      } else {
-        // block is now dirty -- can't be replaced until flushed
-        policy.set_dirty(block_io.block);
       }
-      req = new C_WriteToMetaRequest<I>(cct, meta_store, block_io.block, &policy, req);
 
+      MetaInfo meta_info_dirty(block_io.block, true);
+      req = new C_UpdateToMemMetaRequest<I>(cct, &policy, meta_info_dirty, req);
       if (block_io.partial_block) {
         IOType io_type = static_cast<IOType>(block_io.io_type);
         if ((io_type == IO_TYPE_WRITE || io_type == IO_TYPE_DISCARD) &&
@@ -653,16 +653,17 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
         promote_buffers.emplace_back();
 
         if (block_io.tid > 0) {
+          /*promoteToCache after Journal and do it async?*/
+          /*req = new C_PromoteToCache<I>(cct, image_store, block_io,
+                                        promote_buffers.back(), req);*/
           req = new C_AppendEventToJournal<I>(cct, journal_store, block_io.tid,
                                               block_io.block, IO_TYPE_WRITE,
                                               req);
         }
-        req = new C_PromoteToCache<I>(cct, image_store, block_io,
-                                      promote_buffers.back(), req);
         req = new C_ModifyBlockBuffer(cct, block_io, bl,
                                       &promote_buffers.back(), req);
         if (policy_map_result == POLICY_MAP_RESULT_HIT) {
-          if (block_io.tid > 0 &&
+          /*if (block_io.tid > 0 &&
               journal_store.is_demote_required(block_io.block)) {
             req = new C_DemoteBlockToJournal<I>(cct, journal_store,
                                                 block_io.block,
@@ -671,29 +672,27 @@ struct C_WriteBlockRequest : BlockGuard::C_BlockRequest {
           req = new C_ReadBlockFromCacheRequest<I>(cct, image_store,
                                                    block_io.block, BLOCK_SIZE,
                                                    &promote_buffers.back(),
-                                                   req);
+                                                   req);*/
         } else {
           req = new C_ReadBlockFromImageRequest<I>(cct, image_writeback,
                                                    block_io.block,
                                                    &promote_buffers.back(),
                                                    req);
         }
-      } else {
+      } else {/*END OF PARTIAL BLOCK*/
         // full block overwrite
-        /*if (block_io.tid > 0) {
-          req = new C_AppendEventToJournal<I>(cct, journal_store, block_io.tid,
-                                              block_io.block, IO_TYPE_WRITE,
-                                              req);
-        }*/
+        if (policy_map_result == POLICY_MAP_RESULT_HIT) {
 
-        req = new C_PromoteToCache<I>(cct, image_store, block_io,
+	}
+
+        req = new C_PromoteToCache<I>(cct, image_store, on_disk_off,
                                       bl, req);
       }
 
-      if (policy_map_result == POLICY_MAP_RESULT_REPLACE) {
+      /*if (policy_map_result == POLICY_MAP_RESULT_REPLACE) {
         req = new C_DemoteFromCache<I>(cct, image_store, release_block,
                                        block_io.block, req);
-      }
+      }*/
     }
     //req->send();
     //chendi: schedule send on another tread, and check if we can continue
@@ -721,11 +720,8 @@ struct C_WritebackRequest : public Context {
   ImageStore<I> &image_store;
   const ReleaseBlock &release_block;
   util::AsyncOpTracker &async_op_tracker;
-  uint64_t tid;
+  BlockGuard::BlockIO *block_io;
   uint64_t block;
-  IOType io_type;
-  bool demoted;
-  uint32_t block_size;
 
   bufferlist bl;
 
@@ -733,15 +729,14 @@ struct C_WritebackRequest : public Context {
                      Policy &policy, JournalStore<I> &journal_store,
                      ImageStore<I> &image_store,
                      const ReleaseBlock &release_block,
-                     util::AsyncOpTracker &async_op_tracker, uint64_t tid,
-                     uint64_t block, IOType io_type, bool demoted,
-                     uint32_t block_size)
+                     util::AsyncOpTracker &async_op_tracker,
+                     BlockGuard::BlockIO *block_io)
     : image_ctx(image_ctx), image_writeback(image_writeback),
       policy(policy), journal_store(journal_store), image_store(image_store),
       release_block(release_block), async_op_tracker(async_op_tracker),
-      tid(tid), block(block), io_type(io_type), demoted(demoted),
-      block_size(block_size) {
+      block_io(block_io){
     async_op_tracker.start_op();
+    block = block_io->block;
   }
   virtual ~C_WritebackRequest() {
     async_op_tracker.finish_op();
@@ -758,11 +753,7 @@ struct C_WritebackRequest : public Context {
     Context *ctx = util::create_context_callback<
       C_WritebackRequest<I>,
       &C_WritebackRequest<I>::handle_read_from_cache>(this);
-    if (demoted) {
-      journal_store.get_writeback_block(tid, &bl, ctx);
-    } else {
-      image_store.read_block(block, {{0, block_size}}, &bl, ctx);
-    }
+    image_store.read_block(block, {{0, BLOCK_SIZE}}, &bl, ctx);
   }
 
   void handle_read_from_cache(int r) {
@@ -786,7 +777,7 @@ struct C_WritebackRequest : public Context {
     Context *ctx = util::create_context_callback<
       C_WritebackRequest<I>,
       &C_WritebackRequest<I>::handle_write_to_image>(this);
-    image_writeback.aio_write({{block * block_size, block_size}}, std::move(bl),
+    image_writeback.aio_write({{block * BLOCK_SIZE, BLOCK_SIZE}}, std::move(bl),
                               0, ctx);
   }
 
@@ -805,22 +796,16 @@ struct C_WritebackRequest : public Context {
   }
 
   void commit_event() {
-    if (tid == 0) {
-      complete(0);
-      return;
-    }
-
     CephContext *cct = image_ctx.cct;
     ldout(cct, 20) << "(C_WritebackRequest)" << dendl;
 
-    if (!demoted) {
-      policy.clear_dirty(block);
-    }
+    policy.clear_dirty(block);
+    complete(0);
 
-    Context *ctx = util::create_context_callback<
+    /*Context *ctx = util::create_context_callback<
       C_WritebackRequest<I>,
       &C_WritebackRequest<I>::handle_commit_event>(this);
-    journal_store.commit_event(tid, ctx);
+    journal_store.commit_event(tid, ctx);*/
   }
 
   void handle_commit_event(int r) {
@@ -857,7 +842,7 @@ template <typename I>
 FileImageCache<I>::FileImageCache(ImageCtx &image_ctx)
   : m_image_ctx(image_ctx), m_image_writeback(image_ctx),
     m_block_guard(image_ctx.cct, 256, BLOCK_SIZE),
-    m_policy(new StupidPolicy<I>(m_image_ctx, m_block_guard)),
+    m_policy(new SimpleLogPolicy<I>(m_image_ctx, m_block_guard)),
     m_release_block(std::bind(&FileImageCache<I>::release_block, this,
                               std::placeholders::_1)),
     m_lock("librbd::cache::FileImageCache::m_lock") {
@@ -1022,7 +1007,7 @@ void FileImageCache<I>::init(Context *on_finish) {
       if (r >= 0) {
         // TODO need to support dynamic image resizes
         m_policy->set_block_count(
-          m_meta_store->offset_to_block(m_image_ctx.size));
+          m_policy->offset_to_block(m_image_ctx.size));
       }
       on_finish->complete(r);
     });
@@ -1051,8 +1036,8 @@ void FileImageCache<I>::init(Context *on_finish) {
 
     });
   m_meta_store = new MetaStore<I>(m_image_ctx, BLOCK_SIZE);
-  m_meta_store->init(&meta_bl, ctx);
   m_meta_store->set_entry_size(m_policy->get_entry_size());
+  m_meta_store->init(&meta_bl, ctx);
 }
 
 template <typename I>
@@ -1144,7 +1129,7 @@ void FileImageCache<I>::map_block(bool detain_block,
   ldout(cct, 20) << "block_io=[" << block_io << "]" << dendl;
 
   int r;
-  if (detain_block) {
+  /*if (detain_block) {
     r = m_block_guard.detain(block_io.block, &block_io);
     if (r < 0) {
       Mutex::Locker locker(m_lock);
@@ -1155,13 +1140,12 @@ void FileImageCache<I>::map_block(bool detain_block,
       ldout(cct, 20) << "block already detained" << dendl;
       return;
     }
-  }
+  }*/
 
   IOType io_type = static_cast<IOType>(block_io.io_type);
   PolicyMapResult policy_map_result;
-  uint64_t replace_cache_block;
-  r = m_policy->map(io_type, block_io.block, block_io.partial_block,
-                    &policy_map_result, &replace_cache_block);
+  uint64_t on_disk_off;
+  r = m_policy->map(io_type, &block_io, &policy_map_result, &on_disk_off);
   if (r < 0) {
     // fail this IO and release any detained IOs to the block
     lderr(cct) << "failed to map block via cache policy: " << cpp_strerror(r)
@@ -1171,7 +1155,7 @@ void FileImageCache<I>::map_block(bool detain_block,
     return;
   }
 
-  block_io.block_request->remap(policy_map_result, std::move(block_io));
+  block_io.block_request->remap(policy_map_result, std::move(block_io), on_disk_off);
 }
 
 template <typename I>
@@ -1254,30 +1238,49 @@ template <typename I>
 void FileImageCache<I>::process_writeback_dirty_blocks() {
   CephContext *cct = m_image_ctx.cct;
 
+  std::map<uint64_t> dirty_block_map;
   // TODO throttle the amount of in-flight writebacks
-  while (true) {
-    uint64_t tid = 0;
-    uint64_t block;
-    IOType io_type;
-    bool demoted;
-    int r = m_journal_store->get_writeback_event(&tid, &block, &io_type,
-                                                 &demoted);
-    //int r = m_policy->get_writeback_block(&block);
-    if (r == -ENODATA || r == -EBUSY) {
-      // nothing to writeback
-      return;
-    } else if (r < 0) {
-      lderr(cct) << "failed to retrieve writeback block: "
-                 << cpp_strerror(r) << dendl;
-      return;
-    }
+  int r = m_policy->get_writeback_blocks(std::move(dirty_block_map));
+  if (r == -ENODATA || r == -EBUSY) {
+    // nothing to writeback
+    return;
+  } else if (r < 0) {
+    lderr(cct) << "failed to retrieve writeback block: "
+               << cpp_strerror(r) << dendl;
+    return;
+  }
+  for ( std::map<uint64_t>::iterator entry_it = dirty_block_map.begin();
+        entry_it != dirty_block_map.end(); entry_it++ ) {
+    process_writeback_block(entry_it->second);
+  }
+}
 
-    // block is now detained -- safe for writeback
-    C_WritebackRequest<I> *req = new C_WritebackRequest<I>(
-      m_image_ctx, m_image_writeback, *m_policy, *m_journal_store,
-      *m_image_store, m_release_block, m_async_op_tracker, tid, block, io_type,
-      demoted, BLOCK_SIZE);
-    req->send();
+template <typename I>
+void FileImageCache<I>::process_writeback_block(BlockGuard::BlockIO *block_io) {
+  IOType io_type;
+  bool demoted;
+
+  BlockGuard::C_BlockIORequest *orig_tail_block_io_req = nullptr;
+  if (block_io->tail_block_io_request!=nullptr) {
+    orig_tail_block_io_req = block_io->tail_block_io_request;
+  }
+  // block is now detained -- safe for writeback
+  C_WritebackRequest<I> *req = new C_WritebackRequest<I>(
+    m_image_ctx, m_image_writeback, *m_policy, *m_journal_store,
+    *m_image_store, m_release_block, m_async_op_tracker, block_io);
+
+  block_io->tail_block_io_request = req;
+  if (orig_tail_block_io_req != nullptr)
+    orig_tail_block_io_req->next_block_request = req;
+  if(!block_io->in_process) {
+    ldout(cct, 1) << "block_io: "<< block_io->block << " is not in process, will schedule" << dendl;
+    block_io->start_process();
+    image_ctx.pcache_op_work_queue->queue(new FunctionContext(
+      [req](int r) {
+	  req->send();
+	}), 0);
+  }else{
+    ldout(cct, 1) << "block_io: "<< block_io->block << " is in process, will skip schedule" << dendl;
   }
 }
 

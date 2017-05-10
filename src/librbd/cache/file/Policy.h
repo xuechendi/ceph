@@ -18,6 +18,12 @@ namespace file {
  */
 class Policy {
 public:
+  struct MetaInfo{
+    uint64_t block_id;
+    bool dirty;
+    MetaInfo(uint64_t block_id, bool dirty):
+      block_id(block_id), dirty(dirty){}
+  };
   virtual ~Policy() {
   }
 
@@ -31,8 +37,10 @@ public:
   virtual bool is_dirty(uint64_t block) const = 0;
   virtual void set_dirty(uint64_t block) = 0;
   virtual void clear_dirty(uint64_t block) = 0;
+  virtual void update_meta_info(MetaInfo meta_info);
 
-  virtual int get_writeback_block(uint64_t *block) = 0;
+  virtual int get_writeback_block(uint64_t *block);
+  virtual int get_writeback_blocks(std::map<uint64_t,uint64_t> &&block_map);
 
   virtual int map(IOType io_type, uint64_t block, bool partial_block,
                   PolicyMapResult *policy_map_result,
@@ -43,7 +51,8 @@ public:
 
   virtual void entry_to_bufferlist(uint64_t block, bufferlist *bl) = 0;
   virtual void bufferlist_to_entry(bufferlist &bl) = 0;
-
+  virtual inline uint64_t offset_to_block(uint64_t offset);
+  virtual inline uint64_t block_to_offset(uint64_t block);
 
 };
 
