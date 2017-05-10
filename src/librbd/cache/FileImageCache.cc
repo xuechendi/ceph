@@ -1254,30 +1254,52 @@ template <typename I>
 void FileImageCache<I>::process_writeback_dirty_blocks() {
   CephContext *cct = m_image_ctx.cct;
 
+  //1. dirty ratio exceeds throttle.
+  //2. dirty block updated 10sec ago.
+  uint64_t block;
   // TODO throttle the amount of in-flight writebacks
-  while (true) {
-    uint64_t tid = 0;
-    uint64_t block;
+  int r = m_policy->get_writeback_block(&block);
+  if (r == -ENODATA || r == -EBUSY) {
+    // nothing to writeback
+    return;
+  } else if (r < 0) {
+    lderr(cct) << "failed to retrieve writeback block: "
+               << cpp_strerror(r) << dendl;
+    return;
+  }
+  }
+}
+
+template <typename I>
+void FileImageCache<I>::process_writeback_block(BlockGuard::BlockIO &&block_io){
     IOType io_type;
     bool demoted;
-    int r = m_journal_store->get_writeback_event(&tid, &block, &io_type,
-                                                 &demoted);
-    //int r = m_policy->get_writeback_block(&block);
-    if (r == -ENODATA || r == -EBUSY) {
-      // nothing to writeback
-      return;
-    } else if (r < 0) {
-      lderr(cct) << "failed to retrieve writeback block: "
-                 << cpp_strerror(r) << dendl;
-      return;
-    }
+    uint64_t tid = 0;
 
+    BlockGuard::C_BlockIORequest *orig_tail_block_io_req = nullptr;
+    if (block_io.tail_block_io_request!=nullptr) {
+      orig_tail_block_io_req = block_io.tail_block_io_request;
+    
     // block is now detained -- safe for writeback
     C_WritebackRequest<I> *req = new C_WritebackRequest<I>(
       m_image_ctx, m_image_writeback, *m_policy, *m_journal_store,
-      *m_image_store, m_release_block, m_async_op_tracker, tid, block, io_type,
+      *m_image_store, m_release_block, m_async_op_tracker, tid, block_io.block, io_type,
       demoted, BLOCK_SIZE);
-    req->send();
+
+    block_io.tail_block_io_request = req;
+    if (orig_tail_block_io_req != nullptr)
+      orig_tail_block_io_req->next_block_request = req;
+end_image_cache_request
+    if(!block_io.in_process) {
+      ldout(cct, 1) << "block_io: "<< block_io.block << " is not in process, will schedule" << dendl;
+      block_io.start_process();
+      image_ctx.pcache_op_work_queue->queue(new FunctionContext(
+        [req](int r) {
+	  req->send();
+	}), 0);
+    }else{
+      ldout(cct, 1) << "block_io: "<< block_io.block << " is in process, will skip schedule" << dendl;
+    }
   }
 }
 
