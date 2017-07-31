@@ -17,6 +17,7 @@ namespace file {
  */
 class Policy {
 public:
+  uint64_t m_block_size = 4096;
   virtual ~Policy() {
   }
 
@@ -25,16 +26,19 @@ public:
   virtual int invalidate(uint64_t block) = 0;
 
   virtual int map(IOType io_type, uint64_t block, bool partial_block,
-                  PolicyMapResult *policy_map_result,
-                  bool in_base_cache = false) = 0;
+                  PolicyMapResult *policy_map_result) = 0;
   virtual void tick() = 0;
-  virtual uint64_t offset_to_block(uint64_t offset) = 0;
-  virtual uint64_t block_to_offset(uint64_t block) = 0;
   virtual uint64_t get_block_count() = 0;
   virtual void set_to_base_cache(uint64_t block) = 0;
-  virtual uint8_t get_loc(uint64_t block) = 0;
-  virtual void set_loc(uint8_t *src) = 0;
-
+  virtual uint32_t get_loc(uint64_t block) = 0;
+  virtual void set_loc(uint32_t *src) = 0;
+  virtual uint64_t block_to_offset(uint64_t block) {
+    return block * m_block_size;
+  }
+  virtual uint64_t offset_to_block(uint64_t offset){
+    return offset / m_block_size;
+  }
+  virtual void* get_block_map() = 0;
 };
 
 } // namespace file
