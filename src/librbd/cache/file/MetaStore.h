@@ -25,14 +25,14 @@ public:
   void init(Context *on_finish);
   void remove(Context *on_finish);
   void shut_down(Context *on_finish);
-  void update(uint64_t block_id, uint8_t loc);
-  void get_loc_map(uint8_t *dest);
-  void load(uint8_t loc);
+  void update(uint64_t block_id, uint32_t loc);
+  void get_loc_map(uint32_t *dest);
+  void load(uint32_t loc);
 
 private:
   ImageCtxT &m_image_ctx;
   uint64_t m_block_count;
-  uint8_t *m_loc_map;
+  uint32_t *m_loc_map;
   //mutable Mutex m_lock;
   std::mutex m_lock;
   bool init_m_loc_map;

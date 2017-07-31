@@ -22,8 +22,10 @@ StupidPolicy<I>::StupidPolicy(I &image_ctx, BlockGuard &block_guard)
 
   set_block_count(offset_to_block(image_ctx.size));
   // TODO support resizing of entries based on number of provisioned blocks
-  m_entries.resize(m_block_count); // 1GB of storage
+  m_entries.resize(offset_to_block(image_ctx.ssd_cache_size)); // 1GB of storage
+  uint64_t block_id = 0;
   for (auto &entry : m_entries) {
+    entry.on_disk_id = block_id++;
     m_free_lru.insert_tail(&entry);
   }
 }
@@ -36,13 +38,12 @@ void StupidPolicy<I>::set_block_count(uint64_t block_count) {
   // TODO ensure all entries are in-bound
   Mutex::Locker locker(m_lock);
   m_block_count = block_count;
-
 }
 
 template <typename I>
 int StupidPolicy<I>::invalidate(uint64_t block) {
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 20) << "block=" << block << dendl;
+  ldout(cct, 1) << "block=" << block << dendl;
 
   // TODO handle case where block is in prison (shouldn't be possible
   // if core properly registered blocks)
@@ -88,6 +89,7 @@ int StupidPolicy<I>::map(IOType io_type, uint64_t block, bool partial_block,
     lru = &m_clean_lru;
     
     if (io_type != IO_TYPE_READ) {
+      ldout(cct, 1) << "io_type != read, block: " << block << dendl;
       *policy_map_result = POLICY_MAP_RESULT_HIT;
       if( entry->in_base_cache ) {
         entry->in_base_cache = false;
@@ -122,9 +124,8 @@ int StupidPolicy<I>::map(IOType io_type, uint64_t block, bool partial_block,
     *policy_map_result = POLICY_MAP_RESULT_NEW;
     m_free_lru.remove(entry);
 
-    entry->block = block;
     entry->in_base_cache = in_base_cache;
-    m_block_to_entries[block] = entry;
+    assert( (m_block_to_entries.insert(std::pair<uint64_t, Entry*>(block, entry))).second );
     m_clean_lru.insert_head(entry);
     return 0;
   } else {
@@ -136,6 +137,17 @@ int StupidPolicy<I>::map(IOType io_type, uint64_t block, bool partial_block,
   return 0;
 }
 
+template <typename I>
+uint64_t StupidPolicy<I>::block_to_offset(uint64_t block) {
+  CephContext *cct = m_image_ctx.cct;
+  Mutex::Locker locker(m_lock);
+  auto entry_it = m_block_to_entries.find(block);
+  if (entry_it == m_block_to_entries.end()) {
+    ldout(cct, 1) << "block_to_offset can't find " << block << dendl;
+    assert(0);
+  }
+  return entry_it->second->on_disk_id * m_block_size;
+}
 template <typename I>
 void StupidPolicy<I>::tick() {
   // stupid policy -- do nothing
@@ -151,47 +163,60 @@ void StupidPolicy<I>::set_to_base_cache(uint64_t block) {
 }
 
 template <typename I>
-uint8_t StupidPolicy<I>::get_loc(uint64_t block) {
+uint32_t StupidPolicy<I>::get_loc(uint64_t block) {
   Mutex::Locker locker(m_lock);
   Entry *entry;
+  uint32_t ret_data;
   auto entry_it = m_block_to_entries.find(block);
   if (entry_it != m_block_to_entries.end()) {
     entry = entry_it->second;
-    if (entry->in_base_cache)
-      return LOCATE_IN_BASE_CACHE;
-    else
-      return LOCATE_IN_CACHE;
+    if (entry->in_base_cache) {
+      assert(entry->on_disk_id <= MAX_BLOCK_ID);
+      ret_data = ( entry->on_disk_id | (LOCATE_IN_BASE_CACHE << 30) ); 
+      return ret_data;
+    } else {
+      assert(entry->on_disk_id <= MAX_BLOCK_ID);
+      ret_data = ( entry->on_disk_id | (LOCATE_IN_CACHE << 30) ); 
+      return ret_data;
+    }
   }
-  return NOT_IN_CACHE;
+  return (NOT_IN_CACHE << 30);
 }
 
 template <typename I>
-void StupidPolicy<I>::set_loc(uint8_t *src) {
+void StupidPolicy<I>::set_loc(uint32_t *src) {
+  Mutex::Locker locker(m_lock);
   Entry* entry;
+  uint8_t loc;
+  uint64_t on_disk_id;
   for(uint64_t block_id = 0; block_id < m_block_count; block_id++) {
-    switch(src[block_id]) {
-      case NOT_IN_CACHE:
-        break;
+    loc = src[block_id] >> 30;
+    switch(loc) {
       case LOCATE_IN_CACHE:
-        entry = reinterpret_cast<Entry*>(m_free_lru.get_head());
+        on_disk_id = (src[block_id] & MAX_BLOCK_ID);
+        entry = &m_entries[on_disk_id];
+        assert(entry != nullptr);
         entry->in_base_cache = false;
-        entry->block = block_id;
         m_free_lru.remove(entry);
         m_block_to_entries[block_id] = entry;
         m_clean_lru.insert_head(entry);
         break;
       case LOCATE_IN_BASE_CACHE:
-      default:
-        entry = reinterpret_cast<Entry*>(m_free_lru.get_head());
+        on_disk_id = (src[block_id] & MAX_BLOCK_ID);
+        entry = &m_entries[on_disk_id];
+        assert(entry != nullptr);
         entry->in_base_cache = true;
-        entry->block = block_id;
         m_free_lru.remove(entry);
         m_block_to_entries[block_id] = entry;
         m_clean_lru.insert_head(entry);
         break;
+      case NOT_IN_CACHE:
+      default:
+        break;
     }
   }
 }
+
 
 } // namespace file
 } // namespace cache

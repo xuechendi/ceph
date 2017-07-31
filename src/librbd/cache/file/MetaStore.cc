@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "librbd/cache/file/MetaStore.h"
+#include "librbd/cache/Types.h"
 #include "include/stringify.h"
 #include "common/dout.h"
 #include "librbd/ImageCtx.h"
@@ -20,8 +21,6 @@ template <typename I>
 MetaStore<I>::MetaStore(I &image_ctx, uint64_t block_count)
   : m_image_ctx(image_ctx), m_block_count(block_count),
     m_meta_file(image_ctx.cct, *image_ctx.op_work_queue, image_ctx.id + ".meta"), init_m_loc_map(false) {
-    //m_lock("librbd::cache::file::MetaStore::m_lock") {
-      //m_loc_map = new uint8_t[block_count]();
 }
 
 template <typename I>
@@ -54,24 +53,35 @@ void MetaStore<I>::shut_down(Context *on_finish) {
 }
 
 template <typename I>
-void MetaStore<I>::load(uint8_t loc) {
-  assert(m_meta_file.load((void**)&m_loc_map, m_block_count) == 0);
+void MetaStore<I>::load(uint32_t loc) {
+  assert(m_meta_file.load((void**)&m_loc_map, m_block_count * sizeof(uint32_t)) == 0);
+  uint32_t tmp;
   if (init_m_loc_map) {
     for(uint64_t block = 0; block < m_block_count; block++) {
-      m_loc_map[block] = loc;
+      switch(loc) {
+        case NOT_IN_CACHE:
+          m_loc_map[block] = (loc << 30);
+          break;
+        case LOCATE_IN_BASE_CACHE:
+          tmp = loc << 30;
+          m_loc_map[block] = tmp | block;
+          break;
+        default:
+          assert(0);
+      }
     }
   }
 }
 
 template <typename I>
-void MetaStore<I>::update(uint64_t block_id, uint8_t loc) {
+void MetaStore<I>::update(uint64_t block_id, uint32_t loc) {
   //Mutex::Locker locker(m_lock);
   std::lock_guard<std::mutex> lock(m_lock);
   m_loc_map[block_id] = loc;
 }
 
 template <typename I>
-void MetaStore<I>::get_loc_map(uint8_t* dest) {
+void MetaStore<I>::get_loc_map(uint32_t* dest) {
   for(uint64_t block = 0; block < m_block_count; block++) {
     dest[block] = m_loc_map[block];
   }

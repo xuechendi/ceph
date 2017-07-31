@@ -10,9 +10,10 @@
 namespace librbd {
 namespace cache {
 
-#define LOCATE_IN_BASE_CACHE 0XF0
-#define LOCATE_IN_CACHE      0XF1
-#define NOT_IN_CACHE         0XF2
+#define MAX_BLOCK_ID         0X3FFFFFFF
+#define LOCATE_IN_BASE_CACHE 0X01
+#define LOCATE_IN_CACHE      0X02
+#define NOT_IN_CACHE         0X03
 
 enum PolicyMapResult {
   POLICY_MAP_RESULT_HIT,    // block is already in cache

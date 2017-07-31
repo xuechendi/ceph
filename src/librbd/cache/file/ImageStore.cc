@@ -17,8 +17,8 @@ namespace cache {
 namespace file {
 
 template <typename I>
-ImageStore<I>::ImageStore(I &image_ctx, Policy &policy, uint64_t image_size, std::string volume_name)
-  : m_image_ctx(image_ctx), m_policy(policy),m_image_size(image_size),
+ImageStore<I>::ImageStore(I &image_ctx, uint64_t image_size, std::string volume_name)
+  : m_image_ctx(image_ctx), m_image_size(image_size),
     m_cache_file(image_ctx.cct, *image_ctx.op_work_queue,
                  volume_name + ".image_cache") {
   CephContext *cct = m_image_ctx.cct;
@@ -63,14 +63,14 @@ void ImageStore<I>::shut_down(Context *on_finish) {
 template <typename I>
 void ImageStore<I>::reset(Context *on_finish) {
   CephContext *cct = m_image_ctx.cct;
-  ldout(cct, 20) << dendl;
+  ldout(cct, 20) << "Cache_Size: " << m_image_size << dendl;
 
   // TODO
   m_cache_file.truncate(m_image_size, false, on_finish);
 }
 
 template <typename I>
-void ImageStore<I>::read_block(uint64_t cache_block,
+void ImageStore<I>::read_block(uint64_t offset,
                                BlockExtents &&block_extents,
                                bufferlist *bl, Context *on_finish) {
   CephContext *cct = m_image_ctx.cct;
@@ -80,12 +80,12 @@ void ImageStore<I>::read_block(uint64_t cache_block,
   // TODO add gather support
   assert(block_extents.size() == 1);
   auto &extent = block_extents.front();
-  m_cache_file.read(m_policy.block_to_offset(cache_block) + extent.first,
+  m_cache_file.read(offset + extent.first,
                     extent.second, bl, on_finish);
 }
 
 template <typename I>
-void ImageStore<I>::write_block(uint64_t cache_block,
+void ImageStore<I>::write_block(uint64_t offset,
                                 BlockExtents &&block_extents,
                                 bufferlist &&bl, Context *on_finish) {
   CephContext *cct = m_image_ctx.cct;
@@ -100,7 +100,7 @@ void ImageStore<I>::write_block(uint64_t cache_block,
     sub_bl.substr_of(bl, buffer_offset, extent.second);
     buffer_offset += extent.second;
 
-    m_cache_file.write(m_policy.block_to_offset(cache_block) + extent.first,
+    m_cache_file.write(offset + extent.first,
                        std::move(sub_bl), false, ctx->new_sub());
 
   }

@@ -29,9 +29,9 @@ class StupidPolicy : public Policy {
 private:
 
   struct Entry : public LRUObject {
-    uint64_t block;
+    uint64_t on_disk_id;
     bool in_base_cache;
-    Entry() : block(0), in_base_cache(false) {
+    Entry() : on_disk_id(0), in_base_cache(false) {
     }
   };
 
@@ -40,7 +40,6 @@ private:
 
   ImageCtxT &m_image_ctx;
   BlockGuard &m_block_guard;
-  uint64_t m_block_size = 4096;
 
   mutable Mutex m_lock;
   uint64_t m_block_count = 0;
@@ -63,20 +62,13 @@ public:
                   bool in_base_cache = false);
   virtual void tick();
   void set_to_base_cache(uint64_t block);
-  inline uint64_t offset_to_block(uint64_t offset) {
-    return offset / m_block_size;
-  }
-
-  inline uint64_t block_to_offset(uint64_t block) {
-    return block * m_block_size;
-  }
-  
+  uint64_t block_to_offset(uint64_t block) override;
   inline uint64_t get_block_count(){
     return m_block_count;
   }
 
-  virtual uint8_t get_loc(uint64_t block);
-  virtual void set_loc(uint8_t *src);
+  virtual uint32_t get_loc(uint64_t block);
+  virtual void set_loc(uint32_t *src);
 
 };
 
