@@ -7,7 +7,6 @@
 #include "include/buffer_fwd.h"
 #include "include/int_types.h"
 #include "os/CacheStore/SyncFile.h"
-#include "librbd/cache/file/StupidPolicy.cc"
 #include <vector>
 
 struct Context;
@@ -33,7 +32,7 @@ public:
   void shut_down(Context *on_finish);
   void reset(Context *on_finish);
 
-  void read_block(uint64_t ofset, BlockExtents &&block_extents,
+  void read_block(uint64_t offset, BlockExtents &&block_extents,
                   ceph::bufferlist *bl, Context *on_finish);
   void write_block(uint64_t offset, BlockExtents &&block_extents,
                    ceph::bufferlist &&bl, Context *on_finish);

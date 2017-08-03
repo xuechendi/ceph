@@ -27,12 +27,22 @@ template <typename I>
 void MetaStore<I>::init(Context *on_finish) {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 20) << dendl;
+  Context* ctx;
 
   // TODO
   if (!m_meta_file.try_open()) {
     init_m_loc_map = true;
   }
-  m_meta_file.open(on_finish);
+  ctx = new FunctionContext(
+    [this, on_finish](int r) {
+      if (r < 0) {
+        on_finish->complete(r);
+      } else {
+        assert(m_meta_file.load((void**)&m_loc_map, m_block_count * sizeof(uint32_t)) == 0);
+        on_finish->complete(r);
+      }
+  });
+  m_meta_file.open(ctx);
 }
 
 template <typename I>
@@ -54,7 +64,6 @@ void MetaStore<I>::shut_down(Context *on_finish) {
 
 template <typename I>
 void MetaStore<I>::load(uint32_t loc) {
-  assert(m_meta_file.load((void**)&m_loc_map, m_block_count * sizeof(uint32_t)) == 0);
   uint32_t tmp;
   if (init_m_loc_map) {
     for(uint64_t block = 0; block < m_block_count; block++) {

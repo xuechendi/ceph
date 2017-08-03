@@ -23,16 +23,6 @@ namespace file {
  * Persistent on-disk cache structures
  */
 
-namespace stupid_policy {
-
-struct Entry {
-  bool dirty;
-  bool allocated;
-  uint64_t block;
-};
-
-} // namespace stupid_policy
-
 namespace meta_store {
 
 struct Header {
